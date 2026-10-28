@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 
 from backend.app.db.session import engine, Base
-from backend.app.routers import visitors
+from backend.app.routers import visitors, assets
 
 # Auto-create database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -36,6 +36,7 @@ app.add_middleware(
 
 # Register routers under /api/v1
 app.include_router(visitors.router, prefix="/api/v1")
+app.include_router(assets.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])

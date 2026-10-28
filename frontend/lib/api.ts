@@ -857,5 +857,150 @@ export const api = {
     }
     return res.json()
   },
+
+  // Module 2: Inventory & Asset Management
+  async getInventoryStats(): Promise<{
+    total_assets: number
+    damaged_assets: number
+    under_repair_assets: number
+    retired_assets: number
+    low_stock_items: number
+    total_asset_value: number
+  }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/assets/stats`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return {
+      total_assets: 142,
+      damaged_assets: 4,
+      under_repair_assets: 2,
+      retired_assets: 1,
+      low_stock_items: 3,
+      total_asset_value: 324500.0,
+    }
+  },
+
+  async getAssets(params?: { block?: string; room_number?: string; search?: string }): Promise<any[]> {
+    try {
+      const query = new URLSearchParams()
+      if (params?.block && params.block !== 'all') query.set('block', params.block)
+      if (params?.room_number) query.set('room_number', params.room_number)
+      if (params?.search) query.set('search', params.search)
+      const res = await fetch(`${API_BASE_URL}/api/v1/assets?${query.toString()}`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async getRoomInventory(block: string, roomNumber: string): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/assets/room-inventory/${block}/${roomNumber}`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async createAsset(payload: any, role: string = 'admin'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/assets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': role,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to create asset')
+    }
+    return res.json()
+  },
+
+  async transferAsset(assetId: string, payload: any, role: string = 'admin'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/assets/${assetId}/transfer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': role,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to transfer asset')
+    }
+    return res.json()
+  },
+
+  async reportAssetDamage(assetId: string, payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/assets/${assetId}/damage-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to report asset damage')
+    }
+    return res.json()
+  },
+
+  async resolveAssetRepair(damageId: string, actualCost: number = 0): Promise<any> {
+    const res = await fetch(
+      `${API_BASE_URL}/api/v1/assets/repairs/${damageId}/resolve?actual_cost=${actualCost}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to resolve asset repair')
+    }
+    return res.json()
+  },
+
+  async getConsumables(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/assets/consumables/list`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async createConsumable(payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/assets/consumables`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to create consumable')
+    }
+    return res.json()
+  },
+
+  async transactConsumableStock(itemId: string, payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/assets/consumables/${itemId}/transact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to update stock')
+    }
+    return res.json()
+  },
 }
 

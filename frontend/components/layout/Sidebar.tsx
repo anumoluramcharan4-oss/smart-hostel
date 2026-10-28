@@ -21,6 +21,8 @@ import {
   Sparkles,
   AlertCircle,
   UserCheck,
+  Boxes,
+  PackageSearch,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { api } from '@/lib/api'
@@ -111,6 +113,13 @@ export function Sidebar() {
       badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900',
     },
     {
+      label: 'Inventory & Assets',
+      href: '/admin/inventory',
+      icon: Boxes,
+      badge: 'Stock',
+      badgeColor: 'bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300',
+    },
+    {
       label: 'Fee Management',
       href: '/admin/fees',
       icon: CreditCard,
@@ -171,6 +180,11 @@ export function Sidebar() {
       icon: ShieldCheck,
       badge: 'Queue',
       badgeColor: 'bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300',
+    },
+    {
+      label: 'Room Assets & Stock',
+      href: '/warden/inventory',
+      icon: Boxes,
     },
     {
       label: 'Publish Notice',
