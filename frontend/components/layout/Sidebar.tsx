@@ -120,6 +120,13 @@ export function Sidebar() {
       badgeColor: 'bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300',
     },
     {
+      label: 'Parcel Deliveries',
+      href: '/admin/parcels',
+      icon: PackageSearch,
+      badge: 'Desk',
+      badgeColor: 'bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/50 dark:text-purple-300',
+    },
+    {
       label: 'Fee Management',
       href: '/admin/fees',
       icon: CreditCard,
@@ -187,6 +194,11 @@ export function Sidebar() {
       icon: Boxes,
     },
     {
+      label: 'Parcel Deliveries',
+      href: '/warden/parcels',
+      icon: PackageSearch,
+    },
+    {
       label: 'Publish Notice',
       href: '/warden/notices',
       icon: Megaphone,
@@ -198,6 +210,13 @@ export function Sidebar() {
       label: 'My Room & Quarters',
       href: '/student',
       icon: LayoutDashboard,
+    },
+    {
+      label: 'My Parcels & OTP',
+      href: '/student/parcels',
+      icon: PackageSearch,
+      badge: 'Deliveries',
+      badgeColor: 'bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/50 dark:text-purple-300',
     },
     {
       label: 'Maintenance Tickets',

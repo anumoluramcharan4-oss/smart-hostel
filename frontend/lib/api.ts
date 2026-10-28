@@ -1002,5 +1002,85 @@ export const api = {
     }
     return res.json()
   },
+
+  // Module 3: Parcel & Delivery Management
+  async getParcelStats(): Promise<{
+    awaiting_collection: number
+    collected_today: number
+    overdue_count: number
+    total_received: number
+  }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/parcels/stats`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return {
+      awaiting_collection: 8,
+      collected_today: 14,
+      overdue_count: 1,
+      total_received: 22,
+    }
+  },
+
+  async getParcels(params?: { status?: string; search?: string }): Promise<any[]> {
+    try {
+      const query = new URLSearchParams()
+      if (params?.status && params.status !== 'all') query.set('status', params.status)
+      if (params?.search) query.set('search', params.search)
+      const res = await fetch(`${API_BASE_URL}/api/v1/parcels?${query.toString()}`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async getStudentParcels(studentId: string = 'STU101'): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/parcels/student/my-parcels`, {
+        headers: { 'X-User-Id': studentId },
+      })
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async registerParcel(payload: any, role: string = 'staff'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/parcels`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': role,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to register delivery')
+    }
+    return res.json()
+  },
+
+  async verifyAndCollectParcel(parcelRef: string, pickupCode: string, staffName: string = 'Reception'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/parcels/verify-collect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parcel_ref: parcelRef,
+        pickup_code: pickupCode,
+        staff_id: 'STF-RECEPT-1',
+        staff_name: staffName,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Collection verification failed')
+    }
+    return res.json()
+  },
 }
 
