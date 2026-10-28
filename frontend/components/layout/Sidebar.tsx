@@ -24,6 +24,7 @@ import {
   Boxes,
   PackageSearch,
   Shirt,
+  ClipboardCheck,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { api } from '@/lib/api'
@@ -135,6 +136,13 @@ export function Sidebar() {
       badgeColor: 'bg-cyan-50 text-cyan-700 border border-cyan-200/80 dark:bg-cyan-950/50 dark:text-cyan-300',
     },
     {
+      label: 'Room Inspections',
+      href: '/admin/inspections',
+      icon: ClipboardCheck,
+      badge: 'Audit',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300',
+    },
+    {
       label: 'Fee Management',
       href: '/admin/fees',
       icon: CreditCard,
@@ -210,6 +218,13 @@ export function Sidebar() {
       label: 'Laundry Queue',
       href: '/warden/laundry',
       icon: Shirt,
+    },
+    {
+      label: 'Room Inspections',
+      href: '/warden/inspections',
+      icon: ClipboardCheck,
+      badge: 'Audit',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300',
     },
     {
       label: 'Publish Notice',
