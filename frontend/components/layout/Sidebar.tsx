@@ -23,6 +23,7 @@ import {
   UserCheck,
   Boxes,
   PackageSearch,
+  Shirt,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { api } from '@/lib/api'
@@ -127,6 +128,13 @@ export function Sidebar() {
       badgeColor: 'bg-purple-50 text-purple-700 border border-purple-200/80 dark:bg-purple-950/50 dark:text-purple-300',
     },
     {
+      label: 'Laundry Services',
+      href: '/admin/laundry',
+      icon: Shirt,
+      badge: 'Slot',
+      badgeColor: 'bg-cyan-50 text-cyan-700 border border-cyan-200/80 dark:bg-cyan-950/50 dark:text-cyan-300',
+    },
+    {
       label: 'Fee Management',
       href: '/admin/fees',
       icon: CreditCard,
@@ -199,6 +207,11 @@ export function Sidebar() {
       icon: PackageSearch,
     },
     {
+      label: 'Laundry Queue',
+      href: '/warden/laundry',
+      icon: Shirt,
+    },
+    {
       label: 'Publish Notice',
       href: '/warden/notices',
       icon: Megaphone,
@@ -210,6 +223,13 @@ export function Sidebar() {
       label: 'My Room & Quarters',
       href: '/student',
       icon: LayoutDashboard,
+    },
+    {
+      label: 'Book Laundry Slot',
+      href: '/student/laundry',
+      icon: Shirt,
+      badge: '₹15/pc',
+      badgeColor: 'bg-cyan-50 text-cyan-700 border border-cyan-200/80 dark:bg-cyan-950/50 dark:text-cyan-300',
     },
     {
       label: 'My Parcels & OTP',

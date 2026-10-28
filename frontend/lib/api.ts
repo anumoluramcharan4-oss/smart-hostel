@@ -1082,5 +1082,110 @@ export const api = {
     }
     return res.json()
   },
+
+  // Module 4: Laundry Management
+  async getLaundryStats(): Promise<{
+    today_pickups: number
+    in_processing: number
+    ready_for_delivery: number
+    completed_orders: number
+    total_revenue: number
+  }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/laundry/stats`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return {
+      today_pickups: 6,
+      in_processing: 4,
+      ready_for_delivery: 3,
+      completed_orders: 48,
+      total_revenue: 12450.0,
+    }
+  },
+
+  async getLaundryRates(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/laundry/rates`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return [
+      { item_category: 'SHIRT', rate_per_piece: 15 },
+      { item_category: 'TROUSER', rate_per_piece: 18 },
+      { item_category: 'BEDSHEET', rate_per_piece: 35 },
+      { item_category: 'TOWEL', rate_per_piece: 12 },
+      { item_category: 'JACKET', rate_per_piece: 45 },
+    ]
+  },
+
+  async getLaundryOrders(role: string = 'student', studentId?: string): Promise<any[]> {
+    try {
+      const headers: Record<string, string> = { 'X-User-Role': role }
+      if (studentId) headers['X-User-Id'] = studentId
+      const res = await fetch(`${API_BASE_URL}/api/v1/laundry`, { headers })
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async bookLaundryOrder(payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/laundry/book`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to book laundry order')
+    }
+    return res.json()
+  },
+
+  async confirmLaundryCounts(orderId: string, confirmedCounts: any[]): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/laundry/${orderId}/confirm-counts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'staff',
+      },
+      body: JSON.stringify({
+        confirmed_counts: confirmedCounts,
+        staff_id: 'LND-TECH-1',
+        staff_name: 'Laundry Operator',
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Intake count confirmation failed')
+    }
+    return res.json()
+  },
+
+  async updateLaundryStatus(orderId: string, status: string, notes?: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/laundry/${orderId}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': 'staff',
+      },
+      body: JSON.stringify({
+        status,
+        actor_id: 'LND-TECH-1',
+        actor_name: 'Laundry Operator',
+        notes,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to update laundry status')
+    }
+    return res.json()
+  },
 }
 
