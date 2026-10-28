@@ -104,6 +104,13 @@ export function Sidebar() {
       icon: Megaphone,
     },
     {
+      label: 'Visitor & Security',
+      href: '/admin/visitors',
+      icon: ShieldCheck,
+      badge: 'Live Pass',
+      badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900',
+    },
+    {
       label: 'Fee Management',
       href: '/admin/fees',
       icon: CreditCard,
@@ -157,6 +164,13 @@ export function Sidebar() {
       icon: CheckCircle2,
       badge: 'Live',
       badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300',
+    },
+    {
+      label: 'Visitor Approvals',
+      href: '/warden/visitors',
+      icon: ShieldCheck,
+      badge: 'Queue',
+      badgeColor: 'bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300',
     },
     {
       label: 'Publish Notice',

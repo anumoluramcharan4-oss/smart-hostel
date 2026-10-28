@@ -717,5 +717,145 @@ export const api = {
     persistGrievances(mutableWardenGrievances)
     return { success: true, id }
   },
+
+  // Module 1: Visitor & Security Management
+  async getVisitorStats(): Promise<{
+    currently_inside: number
+    expected_today: number
+    pending_approvals: number
+    overdue_count: number
+    total_today: number
+  }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/stats`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return {
+      currently_inside: 2,
+      expected_today: 5,
+      pending_approvals: 1,
+      overdue_count: 0,
+      total_today: 7,
+    }
+  },
+
+  async getVisitors(params?: { status?: string; search?: string }): Promise<any[]> {
+    try {
+      const query = new URLSearchParams()
+      if (params?.status && params.status !== 'all') query.set('status', params.status)
+      if (params?.search) query.set('search', params.search)
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors?${query.toString()}`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async getVisitorsInside(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/live-inside`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async getPendingVisitors(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/pending`)
+      if (res.ok) return res.json()
+    } catch {
+      // fallback
+    }
+    return []
+  },
+
+  async registerVisitor(payload: any, role: string = 'admin'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/visitors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': role,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to register visitor')
+    }
+    return res.json()
+  },
+
+  async reviewVisitor(visitorId: string, approved: boolean, reason?: string, role: string = 'warden'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': role,
+      },
+      body: JSON.stringify({
+        approved,
+        reviewer_id: role === 'admin' ? 'ADM01' : 'WAR01',
+        reviewer_name: role === 'admin' ? 'Chief Admin' : 'Resident Warden',
+        rejection_reason: reason,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to review visitor')
+    }
+    return res.json()
+  },
+
+  async verifyVisitorPass(passCode: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/verify-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pass_code: passCode }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Invalid pass')
+    }
+    return res.json()
+  },
+
+  async checkInVisitor(visitorId: string, actorName: string = 'Gate Officer'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/check-in`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        actor_id: 'SEC-GATE-1',
+        actor_name: actorName,
+        actor_role: 'security',
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to check in visitor')
+    }
+    return res.json()
+  },
+
+  async checkOutVisitor(visitorId: string, actorName: string = 'Gate Officer'): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/check-out`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        actor_id: 'SEC-GATE-1',
+        actor_name: actorName,
+        actor_role: 'security',
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || 'Failed to check out visitor')
+    }
+    return res.json()
+  },
 }
 

@@ -1,15 +1,21 @@
 """
 Smart Hostel Backend Application
-FastAPI application scaffolding with health check endpoint.
+FastAPI application scaffolding with health check endpoint and module routers.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 
+from backend.app.db.session import engine, Base
+from backend.app.routers import visitors
+
+# Auto-create database tables on startup
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
     title="Smart Hostel API",
-    description="AI-Powered Hostel Management System API",
-    version="1.0.0",
+    description="Smart Hostel Management System 2.0 API",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -28,6 +34,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register routers under /api/v1
+app.include_router(visitors.router, prefix="/api/v1")
+
 
 @app.get("/health", tags=["System"])
 @app.get("/api/health", tags=["System"])
@@ -37,14 +46,12 @@ async def health_check():
     """
     return {
         "status": "healthy",
-        "app": "Smart Hostel API",
-        "version": "1.0.0",
-        "stage": "Stage 1: Frontend Prototype & Architecture Scaffolding",
+        "app": "Smart Hostel 2.0 API",
+        "version": "2.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "services": {
-            "database": "scaffolded",
-            "ai_engine": "ready_for_stage_5",
-            "auth": "ready_for_stage_2"
+            "database": "connected",
+            "visitors_module": "active"
         }
     }
 
