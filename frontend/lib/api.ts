@@ -98,6 +98,145 @@ const persistNotices = (list: Notice[]) => {
   }
 }
 
+const DEFAULT_LAUNDRY_RATES = [
+  { id: 'rate-shirt', item_category: 'SHIRT', service_type: 'WASH_AND_IRON', rate_per_piece: 15, is_active: 'TRUE' },
+  { id: 'rate-trouser', item_category: 'TROUSER', service_type: 'WASH_AND_IRON', rate_per_piece: 18, is_active: 'TRUE' },
+  { id: 'rate-bedsheet', item_category: 'BEDSHEET', service_type: 'WASH_AND_IRON', rate_per_piece: 35, is_active: 'TRUE' },
+  { id: 'rate-towel', item_category: 'TOWEL', service_type: 'WASH_AND_IRON', rate_per_piece: 12, is_active: 'TRUE' },
+  { id: 'rate-jacket', item_category: 'JACKET', service_type: 'WASH_AND_IRON', rate_per_piece: 45, is_active: 'TRUE' },
+]
+
+export const loadStoredLaundryRates = (): any[] => {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('smart_hostel_laundry_rates_v2')
+      if (stored) return JSON.parse(stored)
+    } catch {
+      // ignore
+    }
+  }
+  return [...DEFAULT_LAUNDRY_RATES]
+}
+
+export const persistLaundryRates = (list: any[]) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('smart_hostel_laundry_rates_v2', JSON.stringify(list))
+      window.dispatchEvent(new Event('storage-laundry-rates'))
+    } catch {
+      // ignore
+    }
+  }
+}
+
+const DEFAULT_VISITORS = [
+  {
+    id: 'vis-default-1',
+    name: 'Rajesh Kumar Patel',
+    phone: '+91 98201 00099',
+    category: 'PARENT',
+    host_student_id: 'STU101',
+    host_student_name: 'Alex Johnson',
+    host_student_room: '204',
+    host_student_block: 'Block A',
+    purpose: 'Delivering semester supplies and luggage',
+    status: 'CHECKED_IN',
+    created_at: '2026-10-29T08:00:00.000Z',
+    passes: [
+      {
+        id: 'pass-default-1',
+        visitor_id: 'vis-default-1',
+        pass_code: 'VP-882910AA',
+        valid_from: '2026-10-29T07:00:00.000Z',
+        valid_until: '2026-10-29T18:00:00.000Z',
+        is_revoked: 'FALSE',
+      },
+    ],
+    events: [
+      {
+        id: 'evt-1',
+        visitor_id: 'vis-default-1',
+        event_type: 'CHECKED_IN',
+        actor_id: 'SEC-GATE-1',
+        actor_role: 'security',
+        timestamp: '2026-10-29T08:15:00.000Z',
+        details: 'Gate entry verified',
+      },
+    ],
+  },
+  {
+    id: 'vis-default-2',
+    name: 'Sunita Sharma',
+    phone: '+91 98111 55667',
+    category: 'FAMILY',
+    host_student_id: 'STU102',
+    host_student_name: 'Kabir Sen',
+    host_student_room: '204',
+    host_student_block: 'Block A',
+    purpose: 'Weekend guardian meeting',
+    status: 'CHECKED_IN',
+    created_at: '2026-10-29T08:30:00.000Z',
+    passes: [
+      {
+        id: 'pass-default-2',
+        visitor_id: 'vis-default-2',
+        pass_code: 'VP-771290BB',
+        valid_from: '2026-10-29T08:00:00.000Z',
+        valid_until: '2026-10-29T19:00:00.000Z',
+        is_revoked: 'FALSE',
+      },
+    ],
+    events: [
+      {
+        id: 'evt-2',
+        visitor_id: 'vis-default-2',
+        event_type: 'CHECKED_IN',
+        actor_id: 'SEC-GATE-1',
+        actor_role: 'security',
+        timestamp: '2026-10-29T08:45:00.000Z',
+        details: 'Gate entry verified',
+      },
+    ],
+  },
+  {
+    id: 'vis-default-3',
+    name: 'QuickBite Delivery Express',
+    phone: '+91 99887 66554',
+    category: 'DELIVERY_OFFICIAL',
+    host_student_id: 'STU103',
+    host_student_name: 'Dev Dixit',
+    host_student_room: '204',
+    host_student_block: 'Block A',
+    purpose: 'Food delivery parcel',
+    status: 'PENDING_APPROVAL',
+    created_at: '2026-10-29T09:00:00.000Z',
+    passes: [],
+    events: [],
+  },
+]
+
+export const loadStoredVisitors = (): any[] => {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('smart_hostel_visitors_v2')
+      if (stored) return JSON.parse(stored)
+    } catch {
+      // ignore
+    }
+  }
+  return [...DEFAULT_VISITORS]
+}
+
+export const persistVisitors = (list: any[]) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('smart_hostel_visitors_v2', JSON.stringify(list))
+    } catch {
+      // ignore
+    }
+  }
+}
+
 // In-Memory state for mock mutations
 let mutableStudents: Student[] = [...STUDENTS]
 let mutableRooms: Room[] = [...ROOMS]
@@ -732,12 +871,13 @@ export const api = {
     } catch {
       // fallback
     }
+    const list = loadStoredVisitors()
     return {
-      currently_inside: 2,
-      expected_today: 5,
-      pending_approvals: 1,
-      overdue_count: 0,
-      total_today: 7,
+      currently_inside: list.filter((v: any) => v.status === 'CHECKED_IN').length,
+      expected_today: list.filter((v: any) => v.status === 'APPROVED').length,
+      pending_approvals: list.filter((v: any) => v.status === 'PENDING_APPROVAL').length,
+      overdue_count: list.filter((v: any) => v.status === 'OVERDUE').length,
+      total_today: list.length,
     }
   },
 
@@ -751,7 +891,21 @@ export const api = {
     } catch {
       // fallback
     }
-    return []
+    let list = loadStoredVisitors()
+    if (params?.status && params.status !== 'all') {
+      list = list.filter((v: any) => v.status === params.status)
+    }
+    if (params?.search) {
+      const s = params.search.toLowerCase()
+      list = list.filter(
+        (v: any) =>
+          (v.name && v.name.toLowerCase().includes(s)) ||
+          (v.phone && v.phone.includes(s)) ||
+          (v.host_student_name && v.host_student_name.toLowerCase().includes(s)) ||
+          (v.purpose && v.purpose.toLowerCase().includes(s))
+      )
+    }
+    return list
   },
 
   async getVisitorsInside(): Promise<any[]> {
@@ -761,7 +915,7 @@ export const api = {
     } catch {
       // fallback
     }
-    return []
+    return loadStoredVisitors().filter((v: any) => v.status === 'CHECKED_IN')
   },
 
   async getPendingVisitors(): Promise<any[]> {
@@ -771,91 +925,238 @@ export const api = {
     } catch {
       // fallback
     }
-    return []
+    return loadStoredVisitors().filter((v: any) => v.status === 'PENDING_APPROVAL')
   },
 
   async registerVisitor(payload: any, role: string = 'admin'): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/visitors`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Role': role,
-      },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || 'Failed to register visitor')
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': role,
+        },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = loadStoredVisitors()
+        list.unshift(data)
+        persistVisitors(list)
+        return data
+      }
+    } catch {
+      // Fallback
     }
-    return res.json()
+
+    const list = loadStoredVisitors()
+    const autoApprove = payload.category === 'PARENT' || payload.category === 'FAMILY'
+    const passCode = `VP-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
+    const newVisitor: any = {
+      ...payload,
+      id: `vis-${Date.now()}`,
+      status: autoApprove ? 'APPROVED' : 'PENDING_APPROVAL',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      passes: autoApprove
+        ? [
+            {
+              id: `pass-${Date.now()}`,
+              visitor_id: `vis-${Date.now()}`,
+              pass_code: passCode,
+              valid_from: payload.expected_arrival || new Date().toISOString(),
+              valid_until: payload.expected_departure || new Date(Date.now() + 10800000).toISOString(),
+              is_revoked: 'FALSE',
+            },
+          ]
+        : [],
+      events: [
+        {
+          id: `evt-${Date.now()}`,
+          visitor_id: `vis-${Date.now()}`,
+          event_type: 'REGISTERED',
+          actor_id: role,
+          actor_role: 'security',
+          timestamp: new Date().toISOString(),
+          details: `Visitor registered for ${payload.host_student_name || 'student'}. Policy auto_approved=${autoApprove}`,
+        },
+      ],
+    }
+    list.unshift(newVisitor)
+    persistVisitors(list)
+    return newVisitor
   },
 
   async reviewVisitor(visitorId: string, approved: boolean, reason?: string, role: string = 'warden'): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/review`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Role': role,
-      },
-      body: JSON.stringify({
-        approved,
-        reviewer_id: role === 'admin' ? 'ADM01' : 'WAR01',
-        reviewer_name: role === 'admin' ? 'Chief Admin' : 'Resident Warden',
-        rejection_reason: reason,
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || 'Failed to review visitor')
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/review`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': role,
+        },
+        body: JSON.stringify({
+          approved,
+          reviewer_id: role === 'admin' ? 'ADM01' : 'WAR01',
+          reviewer_name: role === 'admin' ? 'Chief Admin' : 'Resident Warden',
+          rejection_reason: reason,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = loadStoredVisitors()
+        const idx = list.findIndex((v: any) => v.id === visitorId)
+        if (idx !== -1) {
+          list[idx] = data
+          persistVisitors(list)
+        }
+        return data
+      }
+    } catch {
+      // Fallback
     }
-    return res.json()
+
+    const list = loadStoredVisitors()
+    const idx = list.findIndex((v: any) => v.id === visitorId)
+    if (idx !== -1) {
+      const newStatus = approved ? 'APPROVED' : 'REJECTED'
+      const passCode = `VP-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
+      list[idx] = {
+        ...list[idx],
+        status: newStatus,
+        reviewed_by: role === 'admin' ? 'Chief Admin' : 'Resident Warden',
+        reviewed_at: new Date().toISOString(),
+        rejection_reason: reason || null,
+        passes: approved
+          ? [
+              {
+                id: `pass-${Date.now()}`,
+                visitor_id: visitorId,
+                pass_code: passCode,
+                valid_from: new Date().toISOString(),
+                valid_until: new Date(Date.now() + 10800000).toISOString(),
+                is_revoked: 'FALSE',
+              },
+            ]
+          : [],
+      }
+      persistVisitors(list)
+      return list[idx]
+    }
+    throw new Error('Visitor not found')
   },
 
   async verifyVisitorPass(passCode: string): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/verify-pass`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pass_code: passCode }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || 'Invalid pass')
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/verify-pass`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pass_code: passCode }),
+      })
+      if (res.ok) return res.json()
+    } catch {
+      // Fallback
     }
-    return res.json()
+
+    const clean = passCode.trim().toUpperCase()
+    const list = loadStoredVisitors()
+    for (const v of list) {
+      const matchedPass = (v.passes || []).find(
+        (p: any) => p.pass_code?.toUpperCase() === clean && p.is_revoked !== 'TRUE'
+      )
+      if (matchedPass) {
+        return {
+          pass_code: matchedPass.pass_code,
+          visitor_id: v.id,
+          visitor_name: v.name,
+          category: v.category,
+          status: v.status,
+          host_student: `${v.host_student_name} (${v.host_student_block || 'Block A'} Rm ${v.host_student_room || '204'})`,
+          purpose: v.purpose,
+          valid_from: matchedPass.valid_from,
+          valid_until: matchedPass.valid_until,
+        }
+      }
+    }
+    throw new Error('Invalid or expired gate pass code')
   },
 
   async checkInVisitor(visitorId: string, actorName: string = 'Gate Officer'): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/check-in`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        actor_id: 'SEC-GATE-1',
-        actor_name: actorName,
-        actor_role: 'security',
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || 'Failed to check in visitor')
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/check-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_id: 'SEC-GATE-1',
+          actor_name: actorName,
+          actor_role: 'security',
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = loadStoredVisitors()
+        const idx = list.findIndex((v: any) => v.id === visitorId)
+        if (idx !== -1) {
+          list[idx] = data
+          persistVisitors(list)
+        }
+        return data
+      }
+    } catch {
+      // Fallback
     }
-    return res.json()
+
+    const list = loadStoredVisitors()
+    const idx = list.findIndex((v: any) => v.id === visitorId)
+    if (idx !== -1) {
+      list[idx] = {
+        ...list[idx],
+        status: 'CHECKED_IN',
+        updated_at: new Date().toISOString(),
+      }
+      persistVisitors(list)
+      return list[idx]
+    }
+    throw new Error('Visitor not found')
   },
 
   async checkOutVisitor(visitorId: string, actorName: string = 'Gate Officer'): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/check-out`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        actor_id: 'SEC-GATE-1',
-        actor_name: actorName,
-        actor_role: 'security',
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || 'Failed to check out visitor')
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/visitors/${visitorId}/check-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_id: 'SEC-GATE-1',
+          actor_name: actorName,
+          actor_role: 'security',
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = loadStoredVisitors()
+        const idx = list.findIndex((v: any) => v.id === visitorId)
+        if (idx !== -1) {
+          list[idx] = data
+          persistVisitors(list)
+        }
+        return data
+      }
+    } catch {
+      // Fallback
     }
-    return res.json()
+
+    const list = loadStoredVisitors()
+    const idx = list.findIndex((v: any) => v.id === visitorId)
+    if (idx !== -1) {
+      list[idx] = {
+        ...list[idx],
+        status: 'CHECKED_OUT',
+        updated_at: new Date().toISOString(),
+      }
+      persistVisitors(list)
+      return list[idx]
+    }
+    throw new Error('Visitor not found')
   },
 
   // Module 2: Inventory & Asset Management
@@ -1109,17 +1410,69 @@ export const api = {
   async getLaundryRates(): Promise<any[]> {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/laundry/rates`)
-      if (res.ok) return res.json()
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0) {
+          persistLaundryRates(data)
+          return data
+        }
+      }
     } catch {
-      // fallback
+      // fallback to stored
     }
-    return [
-      { item_category: 'SHIRT', rate_per_piece: 15 },
-      { item_category: 'TROUSER', rate_per_piece: 18 },
-      { item_category: 'BEDSHEET', rate_per_piece: 35 },
-      { item_category: 'TOWEL', rate_per_piece: 12 },
-      { item_category: 'JACKET', rate_per_piece: 45 },
-    ]
+    return loadStoredLaundryRates()
+  },
+
+  async updateLaundryRate(itemCategory: string, newRate: number, rateId?: string): Promise<any> {
+    const cleanCat = itemCategory.trim().toUpperCase()
+    let updatedObj: any = null
+
+    // Attempt real backend call first if reachable
+    try {
+      const targetUrl = rateId
+        ? `${API_BASE_URL}/api/v1/laundry/rates/${rateId}`
+        : `${API_BASE_URL}/api/v1/laundry/rates`
+      const method = rateId ? 'PUT' : 'POST'
+      const body = rateId
+        ? JSON.stringify({ rate_per_piece: newRate })
+        : JSON.stringify({ item_category: cleanCat, rate_per_piece: newRate, service_type: 'WASH_AND_IRON' })
+
+      const res = await fetch(targetUrl, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-User-Role': 'admin' },
+        body,
+      })
+      if (res.ok) {
+        updatedObj = await res.json()
+      }
+    } catch {
+      // ignore
+    }
+
+    // Always update local persistent storage so it stays immediately responsive in all views
+    const list = loadStoredLaundryRates()
+    const idx = list.findIndex(
+      (r) => r.item_category.toUpperCase() === cleanCat || (rateId && r.id === rateId)
+    )
+    if (idx !== -1) {
+      list[idx] = {
+        ...list[idx],
+        rate_per_piece: newRate,
+      }
+      if (!updatedObj) updatedObj = list[idx]
+    } else {
+      const newItem = {
+        id: rateId || `rate-${cleanCat.toLowerCase()}`,
+        item_category: cleanCat,
+        service_type: 'WASH_AND_IRON',
+        rate_per_piece: newRate,
+        is_active: 'TRUE',
+      }
+      list.push(newItem)
+      if (!updatedObj) updatedObj = newItem
+    }
+    persistLaundryRates(list)
+    return updatedObj
   },
 
   async getLaundryOrders(role: string = 'student', studentId?: string): Promise<any[]> {

@@ -18,6 +18,8 @@ import {
   ArrowRight,
   LogOut,
   Sparkles,
+  Ticket,
+  Shield,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { Role } from '@/lib/types'
@@ -81,7 +83,11 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       group: 'Admin Navigation',
       items: [
         { label: 'Admin Command Dashboard', path: '/admin', icon: LayoutDashboard },
-        { label: 'User & Staff Management', path: '/admin/users', icon: Users },
+        { label: 'Campus Complaints & Tickets', path: '/admin/complaints', icon: Ticket },
+        { label: 'Campus Notice Board & Circulars', path: '/admin/notices', icon: Bell },
+        { label: 'Visitor & Security Pass Desk', path: '/admin/visitors', icon: Shield },
+        { label: 'Students Roster & Directory', path: '/admin/students', icon: Users },
+        { label: 'Rooms & Floor Allocation', path: '/admin/rooms', icon: Building },
         { label: 'Live Occupancy Analytics', path: '/admin/occupancy', icon: Building },
         { label: 'Financial Audit & Revenue', path: '/admin/fees', icon: CreditCard },
         { label: 'Hostel System Settings', path: '/admin/settings', icon: Settings },

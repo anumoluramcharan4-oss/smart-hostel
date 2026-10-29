@@ -9,6 +9,8 @@ from backend.app.schemas.laundry import (
     LaundryCountConfirmation,
     LaundryStatusUpdate,
     LaundryRateResponse,
+    LaundryRateCreate,
+    LaundryRateUpdate,
     LaundryStats
 )
 from backend.app.services.laundry_service import LaundryService
@@ -28,6 +30,27 @@ def get_laundry_stats(db: Session = Depends(get_db)):
 @router.get("/rates", response_model=List[LaundryRateResponse])
 def get_laundry_rates(db: Session = Depends(get_db)):
     return LaundryService.get_rates(db)
+
+@router.put("/rates/{rate_id}", response_model=LaundryRateResponse)
+def update_laundry_rate(
+    rate_id: str,
+    data: LaundryRateUpdate,
+    db: Session = Depends(get_db),
+    role: str = Depends(get_current_user_role)
+):
+    if role not in ["admin", "warden"]:
+        raise HTTPException(status_code=403, detail="Only administrators or wardens can update laundry tariffs")
+    return LaundryService.update_rate(db, rate_id, data.rate_per_piece)
+
+@router.post("/rates", response_model=LaundryRateResponse)
+def create_or_update_laundry_rate(
+    data: LaundryRateCreate,
+    db: Session = Depends(get_db),
+    role: str = Depends(get_current_user_role)
+):
+    if role not in ["admin", "warden"]:
+        raise HTTPException(status_code=403, detail="Only administrators or wardens can configure laundry tariffs")
+    return LaundryService.update_rate_by_category(db, data.item_category, data.rate_per_piece, data.service_type)
 
 @router.get("", response_model=List[LaundryOrderResponse])
 def list_orders(

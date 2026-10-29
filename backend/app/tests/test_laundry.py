@@ -24,12 +24,12 @@ def override_get_db():
     finally:
         db.close()
 
-app.dependency_overrides[get_db] = override_get_db
-
 @pytest.fixture(autouse=True)
 def setup_database():
     Base.metadata.create_all(bind=test_engine)
+    app.dependency_overrides[get_db] = override_get_db
     yield
+    app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=test_engine)
 
 client = TestClient(app)
@@ -131,3 +131,34 @@ def test_laundry_slot_capacity_limit():
     res = client.post("/api/v1/laundry/book", json=payload)
     assert res.status_code == 400
     assert "fully booked" in res.json()["detail"]
+
+def test_laundry_rate_update_by_admin():
+    # 1. Get initial rates
+    rates_res = client.get("/api/v1/laundry/rates")
+    assert rates_res.status_code == 200
+    rates = rates_res.json()
+    assert len(rates) > 0
+    shirt_rate = next(r for r in rates if r["item_category"] == "SHIRT")
+    rate_id = shirt_rate["id"]
+
+    # 2. Student cannot update rate -> 403 Forbidden
+    student_res = client.put(
+        f"/api/v1/laundry/rates/{rate_id}",
+        json={"rate_per_piece": 22.0},
+        headers={"X-User-Role": "student"}
+    )
+    assert student_res.status_code == 403
+
+    # 3. Admin updates rate to 22.0 -> 200 OK
+    admin_res = client.put(
+        f"/api/v1/laundry/rates/{rate_id}",
+        json={"rate_per_piece": 22.0},
+        headers={"X-User-Role": "admin"}
+    )
+    assert admin_res.status_code == 200
+    assert admin_res.json()["rate_per_piece"] == 22.0
+
+    # 4. Verify rates list shows new price
+    updated_rates_res = client.get("/api/v1/laundry/rates")
+    updated_shirt = next(r for r in updated_rates_res.json() if r["item_category"] == "SHIRT")
+    assert updated_shirt["rate_per_piece"] == 22.0

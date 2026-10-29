@@ -176,6 +176,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       Audit & Reports
                     </NextLink>
                     <NextLink
+                      href="/admin/complaints"
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className="block px-3 py-2 rounded-xl text-sm font-medium hover:bg-muted"
+                    >
+                      Complaints &amp; Tickets
+                    </NextLink>
+                    <NextLink
+                      href="/admin/notices"
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className="block px-3 py-2 rounded-xl text-sm font-medium hover:bg-muted"
+                    >
+                      Notice Board
+                    </NextLink>
+                    <NextLink
                       href="/admin/settings"
                       onClick={() => setMobileDrawerOpen(false)}
                       className="block px-3 py-2 rounded-xl text-sm font-medium hover:bg-muted"

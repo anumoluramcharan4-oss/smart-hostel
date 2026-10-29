@@ -25,12 +25,12 @@ def override_get_db():
     finally:
         db.close()
 
-app.dependency_overrides[get_db] = override_get_db
-
 @pytest.fixture(autouse=True)
 def setup_database():
     Base.metadata.create_all(bind=test_engine)
+    app.dependency_overrides[get_db] = override_get_db
     yield
+    app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=test_engine)
 
 client = TestClient(app)
@@ -102,7 +102,7 @@ def test_register_vendor_requires_warden_approval():
     assert len(approved_data["passes"]) == 1
 
 def test_visitor_gate_checkin_checkout_and_duplicate_protection():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(hour=14, minute=0, second=0)
     payload = {
         "name": "Robert Friend",
         "phone": "+1122334455",

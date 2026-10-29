@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import {
@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { CommandPalette } from './CommandPalette'
 import { Role } from '@/lib/types'
@@ -30,6 +30,26 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
   const pathname = usePathname()
   const { user, role, switchRole, logout } = useAuth()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Real-time storage sync
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key === 'smart_hostel_complaints_v2' ||
+        e.key === 'smart_hostel_warden_grievances_v2'
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [queryClient])
 
   const { data: serverComplaints = [] } = useQuery({
     queryKey: ['topbar-complaints'],
@@ -37,13 +57,24 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
     refetchInterval: 1000,
   })
 
-  // Real-time active alerts (only real active urgent/high tickets)
-  const activeAlerts = serverComplaints.filter(
-    (c) =>
+  // Real-time active alerts (scoped so student only sees their own urgent alerts)
+  const activeAlerts = serverComplaints.filter((c) => {
+    const isUrgent =
       (c.priority === 'urgent' || c.priority === 'high') &&
       c.status !== 'resolved' &&
       c.status !== 'student_approved'
-  )
+    if (!isUrgent) return false
+
+    if (role === 'student') {
+      const currentStudentId = user?.id || 'usr-student-1'
+      return (
+        c.studentId === currentStudentId ||
+        (user?.roomNumber && c.roomNumber === user?.roomNumber)
+      )
+    }
+
+    return true
+  })
 
   return (
     <>
@@ -181,8 +212,11 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title="Toggle theme"
+            aria-label="Toggle theme"
           >
-            {theme === 'dark' ? (
+            {!mounted ? (
+              <span className="h-4 w-4 block" />
+            ) : theme === 'dark' ? (
               <Sun className="h-4 w-4 text-amber-400" />
             ) : (
               <Moon className="h-4 w-4 text-slate-600" />

@@ -33,18 +33,28 @@ import { Role } from '@/lib/types'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { role, switchRole } = useAuth()
+  const { role, switchRole, user } = useAuth()
   const queryClient = useQueryClient()
 
-  // Real-time storage sync for live complaint badge
+  // Real-time storage sync for live complaint badge and laundry tariff sync
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'smart_hostel_complaints_v2') {
         queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
       }
+      if (e.key === 'smart_hostel_notices_v3' || e.key === 'smart_hostel_notices_v2') {
+        queryClient.invalidateQueries({ queryKey: ['sidebar-notices'] })
+      }
+    }
+    const handleLaundry = () => {
+      queryClient.invalidateQueries({ queryKey: ['sidebar-laundry-rates'] })
     }
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    window.addEventListener('storage-laundry-rates', handleLaundry)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('storage-laundry-rates', handleLaundry)
+    }
   }, [queryClient])
 
   // Live complaints count query for accurate dynamic badge
@@ -60,6 +70,45 @@ export function Sidebar() {
   ).length
 
   const complaintsBadge = activeComplaintsCount > 0 ? `${activeComplaintsCount} New` : undefined
+
+  // Student specific open complaint count (only their own tickets)
+  const currentStudentId = user?.id || 'usr-student-1'
+  const studentOpenComplaintsCount = complaints.filter(
+    (c) =>
+      (c.studentId === currentStudentId || (user?.roomNumber && c.roomNumber === user?.roomNumber)) &&
+      c.status !== 'resolved' &&
+      c.status !== 'student_approved'
+  ).length
+  const studentComplaintsBadge =
+    studentOpenComplaintsCount > 0 ? `${studentOpenComplaintsCount} Open` : undefined
+
+  // Dynamic notices query
+  const { data: notices = [] } = useQuery({
+    queryKey: ['sidebar-notices'],
+    queryFn: () => api.getNotices(),
+    refetchInterval: 5000,
+  })
+  const noticesBadge = notices.length > 0 ? `${notices.length} New` : undefined
+
+  // Dynamic laundry tariff query
+  const { data: laundryRates = [] } = useQuery({
+    queryKey: ['sidebar-laundry-rates'],
+    queryFn: () => api.getLaundryRates(),
+    refetchInterval: 5000,
+  })
+  const shirtRate =
+    laundryRates.find((r: any) => r.item_category?.toUpperCase() === 'SHIRT')?.rate_per_piece ?? 15
+  const dynamicLaundryBadge = `₹${Math.round(shirtRate)}/pc`
+
+  // Dynamic student fees query
+  const { data: studentFees = [] } = useQuery({
+    queryKey: ['sidebar-student-fees', user?.id],
+    queryFn: () => api.getFees({ studentId: user?.id }),
+  })
+  const pendingFeesTotal = studentFees
+    .filter((f) => f.status !== 'paid')
+    .reduce((acc, curr) => acc + curr.amount, 0)
+  const feesBadge = pendingFeesTotal > 0 ? `₹${(pendingFeesTotal / 1000).toFixed(1)}k Due` : undefined
 
   const isStudent = pathname.startsWith('/student')
   const isWarden = pathname.startsWith('/warden')
@@ -81,21 +130,21 @@ export function Sidebar() {
     },
     {
       label: 'Students',
-      href: '/warden/students',
+      href: '/admin/students',
       icon: Users,
       badge: '1.2k',
       badgeColor: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
     },
     {
       label: 'Rooms & Allocation',
-      href: '/warden/rooms',
+      href: '/admin/rooms',
       icon: BedDouble,
       badge: '94%',
       badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
     },
     {
       label: 'Complaints & Tickets',
-      href: '/warden/complaints',
+      href: '/admin/complaints',
       icon: Ticket,
       badge: complaintsBadge,
       badgeColor: complaintsBadge
@@ -104,7 +153,7 @@ export function Sidebar() {
     },
     {
       label: 'Notice Board',
-      href: '/warden/notices',
+      href: '/admin/notices',
       icon: Megaphone,
     },
     {
@@ -243,7 +292,7 @@ export function Sidebar() {
       label: 'Book Laundry Slot',
       href: '/student/laundry',
       icon: Shirt,
-      badge: '₹15/pc',
+      badge: dynamicLaundryBadge,
       badgeColor: 'bg-cyan-50 text-cyan-700 border border-cyan-200/80 dark:bg-cyan-950/50 dark:text-cyan-300',
     },
     {
@@ -257,22 +306,28 @@ export function Sidebar() {
       label: 'Maintenance Tickets',
       href: '/student/complaints',
       icon: AlertCircle,
-      badge: '1 Open',
-      badgeColor: 'bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300',
+      badge: studentComplaintsBadge,
+      badgeColor: studentComplaintsBadge
+        ? 'bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/50 dark:text-amber-300'
+        : undefined,
     },
     {
       label: 'Hostel Bulletins',
       href: '/student/notices',
       icon: Megaphone,
-      badge: '3 New',
-      badgeColor: 'bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300',
+      badge: noticesBadge,
+      badgeColor: noticesBadge
+        ? 'bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/50 dark:text-blue-300'
+        : undefined,
     },
     {
       label: 'Semester Fees & Dues',
       href: '/student/fees',
       icon: CreditCard,
-      badge: '₹4.5k Due',
-      badgeColor: 'bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/50 dark:text-rose-300',
+      badge: feesBadge,
+      badgeColor: feesBadge
+        ? 'bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-950/50 dark:text-rose-300'
+        : undefined,
     },
     {
       label: 'Resident Profile',

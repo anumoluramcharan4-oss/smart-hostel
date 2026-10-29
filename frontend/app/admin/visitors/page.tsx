@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck,
@@ -19,6 +19,8 @@ import {
   User,
   Phone,
   FileText,
+  X,
+  ArrowLeft,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -29,6 +31,17 @@ export default function VisitorManagementPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [gateCode, setGateCode] = useState('')
   const [verifiedPass, setVerifiedPass] = useState<any>(null)
+
+  // Listen to Escape key to easily close registration or scanner and return to radar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && (activeTab === 'register' || activeTab === 'gate')) {
+        setActiveTab('radar')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeTab])
 
   // Form State
   const [formData, setFormData] = useState({
@@ -186,18 +199,44 @@ export default function VisitorManagementPage() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setActiveTab('register')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition"
+            onClick={() => setActiveTab(activeTab === 'register' ? 'radar' : 'register')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg shadow-sm transition ${
+              activeTab === 'register'
+                ? 'bg-slate-800 text-white dark:bg-slate-700 hover:bg-slate-900'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            <Plus className="h-4 w-4" />
-            Register Visitor
+            {activeTab === 'register' ? (
+              <>
+                <X className="h-4 w-4" />
+                Close Form
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Register Visitor
+              </>
+            )}
           </button>
           <button
-            onClick={() => setActiveTab('gate')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
+            onClick={() => setActiveTab(activeTab === 'gate' ? 'radar' : 'gate')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg shadow-sm transition ${
+              activeTab === 'gate'
+                ? 'bg-slate-800 text-white dark:bg-slate-700 hover:bg-slate-900'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            }`}
           >
-            <QrCode className="h-4 w-4" />
-            Gate Scanner / Fallback
+            {activeTab === 'gate' ? (
+              <>
+                <X className="h-4 w-4" />
+                Close Scanner
+              </>
+            ) : (
+              <>
+                <QrCode className="h-4 w-4" />
+                Gate Scanner / Fallback
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -466,17 +505,30 @@ export default function VisitorManagementPage() {
       {/* TAB 3: Gate Pass Verification */}
       {activeTab === 'gate' && (
         <div className="max-w-xl mx-auto space-y-4">
-          <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xs space-y-4">
-            <div className="text-center space-y-1">
-              <div className="inline-flex p-3 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 mb-1">
-                <QrCode className="h-8 w-8" />
+          <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xs space-y-4 relative">
+            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+                  <QrCode className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Gate Pass Scanner &amp; Verification
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Authenticate visitor entry/exit via pass code.
+                  </p>
+                </div>
               </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Gate Pass Scanner & Verification
-              </h3>
-              <p className="text-xs text-slate-500">
-                Enter QR Pass code or scan badge to authenticate visitor entry/exit.
-              </p>
+              <button
+                type="button"
+                onClick={() => setActiveTab('radar')}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+                title="Close and return to radar (Esc)"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
             <form onSubmit={handleVerifyPass} className="flex gap-2">
@@ -544,13 +596,26 @@ export default function VisitorManagementPage() {
 
       {/* TAB 4: Register Visitor Form */}
       {activeTab === 'register' && (
-        <div className="max-w-2xl mx-auto p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xs">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-            Register Visitor & Issue Pass
-          </h3>
-          <p className="text-xs text-slate-500 mb-4">
-            Daytime parent visits auto-approve; vendor/contractor visits queue for warden review.
-          </p>
+        <div className="max-w-2xl mx-auto p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-xs relative">
+          <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                Register Visitor &amp; Issue Pass
+              </h3>
+              <p className="text-xs text-slate-500">
+                Daytime parent visits auto-approve; vendor/contractor visits queue for warden review.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('radar')}
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
+              title="Close and return to radar (Esc)"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
           <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -650,13 +715,24 @@ export default function VisitorManagementPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={registerMutation.isPending}
-              className="w-full py-2.5 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 shadow-sm transition"
-            >
-              {registerMutation.isPending ? 'Registering...' : 'Register Visitor & Issue Pass'}
-            </button>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('radar')}
+                className="flex-1 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <X className="h-4 w-4 text-slate-400" />
+                <span>Cancel / Go Back</span>
+              </button>
+              <button
+                type="submit"
+                disabled={registerMutation.isPending}
+                className="flex-1 py-2.5 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 shadow-sm transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>{registerMutation.isPending ? 'Registering...' : 'Register Visitor & Issue Pass'}</span>
+              </button>
+            </div>
           </form>
         </div>
       )}

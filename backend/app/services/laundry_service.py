@@ -47,6 +47,39 @@ class LaundryService:
         return db.query(LaundryRate).filter(LaundryRate.is_active == "TRUE").all()
 
     @staticmethod
+    def update_rate(db: Session, rate_id: str, new_price: float) -> LaundryRate:
+        LaundryService.seed_default_rates(db)
+        rate = db.query(LaundryRate).filter(LaundryRate.id == rate_id).first()
+        if not rate:
+            rate = db.query(LaundryRate).filter(func.upper(LaundryRate.item_category) == rate_id.upper()).first()
+        if not rate:
+            raise HTTPException(status_code=404, detail=f"Rate category '{rate_id}' not found")
+        rate.rate_per_piece = float(new_price)
+        db.commit()
+        db.refresh(rate)
+        return rate
+
+    @staticmethod
+    def update_rate_by_category(db: Session, item_category: str, new_price: float, service_type: Optional[LaundryServiceType] = None) -> LaundryRate:
+        LaundryService.seed_default_rates(db)
+        clean_cat = item_category.strip().upper()
+        rate = db.query(LaundryRate).filter(func.upper(LaundryRate.item_category) == clean_cat).first()
+        if not rate:
+            rate = LaundryRate(
+                item_category=clean_cat,
+                service_type=service_type or LaundryServiceType.WASH_AND_IRON,
+                rate_per_piece=float(new_price)
+            )
+            db.add(rate)
+        else:
+            rate.rate_per_piece = float(new_price)
+            if service_type:
+                rate.service_type = service_type
+        db.commit()
+        db.refresh(rate)
+        return rate
+
+    @staticmethod
     def book_order(db: Session, data: LaundryOrderCreate) -> LaundryOrder:
         LaundryService.seed_default_rates(db)
 

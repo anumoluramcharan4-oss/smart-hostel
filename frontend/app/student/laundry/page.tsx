@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Shirt,
@@ -39,10 +39,20 @@ export default function StudentLaundryPage() {
     JACKET: 0,
   })
 
+  // Real-time listener for tariff updates by admin
+  useEffect(() => {
+    const handleLaundry = () => {
+      queryClient.invalidateQueries({ queryKey: ['laundry-rates'] })
+    }
+    window.addEventListener('storage-laundry-rates', handleLaundry)
+    return () => window.removeEventListener('storage-laundry-rates', handleLaundry)
+  }, [queryClient])
+
   // Queries
   const { data: rates = [] } = useQuery({
     queryKey: ['laundry-rates'],
     queryFn: () => api.getLaundryRates(),
+    refetchInterval: 5000,
   })
 
   const { data: myOrders = [], isLoading } = useQuery({
@@ -59,8 +69,22 @@ export default function StudentLaundryPage() {
     JACKET: 45,
   }
   rates.forEach((r: any) => {
-    rateMap[r.item_category] = r.rate_per_piece
+    if (r.item_category) {
+      rateMap[r.item_category.toUpperCase()] = Number(r.rate_per_piece)
+    }
   })
+
+  // Dynamic category list combining defaults and any custom rates configured by admin
+  const allCategories = Array.from(
+    new Set([
+      'SHIRT',
+      'TROUSER',
+      'BEDSHEET',
+      'TOWEL',
+      'JACKET',
+      ...rates.map((r: any) => r.item_category?.toUpperCase()).filter(Boolean),
+    ])
+  )
 
   // Calculate total pieces & estimated amount
   const totalPieces = Object.values(counts).reduce((acc, c) => acc + c, 0)
@@ -183,8 +207,8 @@ export default function StudentLaundryPage() {
                   Select Clothing Items &amp; Counts
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {Object.keys(counts).map((cat) => {
-                    const price = rateMap[cat] || 20
+                  {allCategories.map((cat) => {
+                    const price = rateMap[cat] ?? 20
                     const count = counts[cat] || 0
 
                     return (

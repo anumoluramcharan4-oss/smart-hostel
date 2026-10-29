@@ -12,6 +12,12 @@ import {
   Layers,
   Sparkles,
   TrendingUp,
+  Coins,
+  Edit3,
+  Check,
+  X,
+  Plus,
+  Tag,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -21,10 +27,23 @@ export default function AdminLaundryPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null)
   const [mismatchModal, setMismatchModal] = useState<any>(null)
 
+  // Pricing configuration state
+  const [editingCat, setEditingCat] = useState<string | null>(null)
+  const [editPrice, setEditPrice] = useState<number>(0)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryPrice, setNewCategoryPrice] = useState<number>(20)
+
   // Queries
   const { data: stats } = useQuery({
     queryKey: ['laundry-stats'],
     queryFn: () => api.getLaundryStats(),
+    refetchInterval: 5000,
+  })
+
+  const { data: laundryRates = [] } = useQuery({
+    queryKey: ['laundry-rates'],
+    queryFn: () => api.getLaundryRates(),
     refetchInterval: 5000,
   })
 
@@ -35,6 +54,47 @@ export default function AdminLaundryPage() {
   })
 
   // Mutations
+  const updateRateMutation = useMutation({
+    mutationFn: ({ category, newRate, rateId }: { category: string; newRate: number; rateId?: string }) =>
+      api.updateLaundryRate(category, newRate, rateId),
+    onSuccess: (data, vars) => {
+      toast.success(`Laundry tariff for ${vars.category} updated to ₹${vars.newRate}/piece`)
+      setEditingCat(null)
+      queryClient.invalidateQueries({ queryKey: ['laundry-rates'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-laundry-rates'] })
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to update rate'),
+  })
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCategoryName.trim()) {
+      toast.error('Please enter a garment category name')
+      return
+    }
+    if (newCategoryPrice <= 0) {
+      toast.error('Price must be greater than 0')
+      return
+    }
+    updateRateMutation.mutate({
+      category: newCategoryName.trim().toUpperCase(),
+      newRate: Number(newCategoryPrice),
+    })
+    setIsAddModalOpen(false)
+    setNewCategoryName('')
+    setNewCategoryPrice(20)
+  }
+
+  const standardOrder = ['SHIRT', 'TROUSER', 'BEDSHEET', 'TOWEL', 'JACKET']
+  const sortedRates = [...laundryRates].sort((a: any, b: any) => {
+    const idxA = standardOrder.indexOf(a.item_category?.toUpperCase())
+    const idxB = standardOrder.indexOf(b.item_category?.toUpperCase())
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB
+    if (idxA !== -1) return -1
+    if (idxB !== -1) return 1
+    return (a.item_category || '').localeCompare(b.item_category || '')
+  })
+
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status, notes }: { id: string; status: string; notes?: string }) =>
       api.updateLaundryStatus(id, status, notes),
@@ -127,6 +187,131 @@ export default function AdminLaundryPage() {
               ₹{(stats?.total_revenue ?? 0).toLocaleString()}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Garment Tariffs & Laundry Pricing Management */}
+      <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-50 dark:bg-cyan-950 text-cyan-600 dark:text-cyan-400">
+              <Coins className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Clothing Tariffs &amp; Laundry Pricing
+                </h3>
+                <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  Live Rates
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Manually adjust per-piece washing and steam-ironing rates. Changes sync dynamically with student slot booking and invoicing.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Add Garment Tariff</span>
+          </button>
+        </div>
+
+        {/* Tariffs Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sortedRates.map((rate: any) => {
+            const isEditing = editingCat === rate.item_category
+            return (
+              <div
+                key={rate.id || rate.item_category}
+                className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex flex-col justify-between hover:border-cyan-300 dark:hover:border-cyan-800 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300">
+                      <Shirt className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wide">
+                        {rate.item_category}
+                      </span>
+                      <p className="text-[10px] text-slate-400">Wash &amp; Steam-Iron</p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                    Active
+                  </span>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+                  {isEditing ? (
+                    <div className="flex items-center gap-1.5 w-full">
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(Math.max(1, Number(e.target.value)))}
+                          className="w-full pl-6 pr-2 py-1 text-xs font-bold rounded-lg border border-cyan-400 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                          autoFocus
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          updateRateMutation.mutate({
+                            category: rate.item_category,
+                            newRate: editPrice,
+                            rateId: rate.id,
+                          })
+                        }}
+                        disabled={updateRateMutation.isPending}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs transition-colors"
+                        title="Save new price"
+                      >
+                        <Check className="h-3 w-3" />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        onClick={() => setEditingCat(null)}
+                        className="p-1 rounded-lg border border-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+                        title="Cancel"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                          ₹{rate.rate_per_piece}
+                        </span>
+                        <span className="text-[10px] text-slate-400 ml-1">/ piece</span>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setEditingCat(rate.item_category)
+                          setEditPrice(Number(rate.rate_per_piece))
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 hover:underline px-2 py-1 rounded hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        <span>Change Price</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -318,6 +503,73 @@ export default function AdminLaundryPage() {
                   className="flex-1 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
                 >
                   Confirm Physical Count
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Custom Garment Rate Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Tag className="h-4 w-4 text-cyan-500" />
+                Add New Garment Tariff
+              </h3>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCategory} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                  Garment Category Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. BLANKET, KURTA, HOODIE..."
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 uppercase font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                  Rate Per Piece (₹) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={newCategoryPrice}
+                  onChange={(e) => setNewCategoryPrice(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 font-semibold"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="flex-1 py-2 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateRateMutation.isPending}
+                  className="flex-1 py-2 text-xs font-semibold rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 font-bold"
+                >
+                  Save Tariff
                 </button>
               </div>
             </form>

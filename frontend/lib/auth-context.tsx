@@ -23,8 +23,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
-  const [role, setRole] = useState<Role>('admin')
-  const [user, setUser] = useState<User | null>(DEMO_USERS.admin)
+  const initialRole: Role = pathname?.startsWith('/student')
+    ? 'student'
+    : pathname?.startsWith('/warden')
+    ? 'warden'
+    : 'admin'
+
+  const [role, setRole] = useState<Role>(initialRole)
+  const [user, setUser] = useState<User | null>(DEMO_USERS[initialRole] || DEMO_USERS.admin)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {

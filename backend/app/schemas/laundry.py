@@ -79,8 +79,13 @@ class LaundryOrderResponse(BaseModel):
 
 class LaundryRateCreate(BaseModel):
     item_category: str
-    service_type: LaundryServiceType
+    service_type: Optional[LaundryServiceType] = LaundryServiceType.WASH_AND_IRON
     rate_per_piece: float
+
+class LaundryRateUpdate(BaseModel):
+    rate_per_piece: float
+    service_type: Optional[LaundryServiceType] = None
+    is_active: Optional[str] = None
 
 class LaundryRateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
