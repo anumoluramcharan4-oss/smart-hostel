@@ -13,5 +13,9 @@
     "test": "npm --prefix frontend run test",
     "lint": "npm --prefix frontend run lint",
     "typecheck": "npm --prefix frontend run typecheck"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0"
   }
 }
