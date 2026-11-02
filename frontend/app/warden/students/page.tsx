@@ -18,19 +18,20 @@ import { api } from '@/lib/api'
 import { PageHeader } from '@/components/common/PageHeader'
 import { DataTable } from '@/components/common/DataTable'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { Avatar } from '@/components/common/Avatar'
 import { Student } from '@/lib/types'
 import { formatINR } from '@/lib/utils'
 
 export default function WardenStudentsPage() {
-  const [selectedBlock, setSelectedBlock] = useState('all')
+  const [selectedFloor, setSelectedFloor] = useState('all')
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('all')
   const [activeStudent, setActiveStudent] = useState<Student | null>(null)
 
   const { data: students = [], isLoading } = useQuery({
-    queryKey: ['warden-students', selectedBlock, selectedFeeStatus],
+    queryKey: ['warden-students', selectedFloor, selectedFeeStatus],
     queryFn: () =>
       api.getStudents({
-        block: selectedBlock,
+        floor: selectedFloor !== 'all' ? Number(selectedFloor) : undefined,
         feeStatus: selectedFeeStatus,
       }),
   })
@@ -43,11 +44,7 @@ export default function WardenStudentsPage() {
         const std = row.original
         return (
           <div className="flex items-center gap-3">
-            <img
-              src={std.avatar}
-              alt={std.name}
-              className="h-8 w-8 rounded-full object-cover ring-1 ring-border shrink-0"
-            />
+            <Avatar name={std.name} src={std.avatar} size="sm" />
             <div>
               <p className="font-semibold text-foreground text-xs sm:text-sm">
                 {std.name}
@@ -167,15 +164,16 @@ export default function WardenStudentsPage() {
         filterElement={
           <div className="flex items-center gap-2">
             <select
-              value={selectedBlock}
-              onChange={(e) => setSelectedBlock(e.target.value)}
+              value={selectedFloor}
+              onChange={(e) => setSelectedFloor(e.target.value)}
               className="rounded-xl border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
-              <option value="all">All Blocks</option>
-              <option value="Newton">Block A (Newton)</option>
-              <option value="Aryabhata">Block B (Aryabhata)</option>
-              <option value="Ramanujan">Block C (Ramanujan)</option>
-              <option value="Kalam">Block D (Kalam)</option>
+              <option value="all">All Floors (1-5)</option>
+              <option value="1">Floor 1 (A-101 to A-106)</option>
+              <option value="2">Floor 2 (A-201 to A-206)</option>
+              <option value="3">Floor 3 (A-301 to A-306)</option>
+              <option value="4">Floor 4 (A-401 to A-406)</option>
+              <option value="5">Floor 5 (A-501 to A-506)</option>
             </select>
 
             <select

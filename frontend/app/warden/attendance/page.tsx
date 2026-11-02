@@ -180,9 +180,6 @@ export default function WardenAttendancePage() {
               className="rounded-xl border border-input bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
             >
               <option value="Newton">Block A (Newton)</option>
-              <option value="Aryabhata">Block B (Aryabhata)</option>
-              <option value="Ramanujan">Block C (Ramanujan)</option>
-              <option value="Kalam">Block D (Kalam)</option>
             </select>
           </div>
         </div>

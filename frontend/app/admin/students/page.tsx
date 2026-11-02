@@ -22,19 +22,20 @@ import { api } from '@/lib/api'
 import { PageHeader } from '@/components/common/PageHeader'
 import { DataTable } from '@/components/common/DataTable'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { Avatar } from '@/components/common/Avatar'
 import { Student } from '@/lib/types'
 import { formatINR } from '@/lib/utils'
 
 export default function AdminStudentsPage() {
-  const [selectedBlock, setSelectedBlock] = useState('all')
+  const [selectedFloor, setSelectedFloor] = useState('all')
   const [selectedFeeStatus, setSelectedFeeStatus] = useState('all')
   const [activeStudent, setActiveStudent] = useState<Student | null>(null)
 
   const { data: students = [], isLoading } = useQuery({
-    queryKey: ['admin-students-roster', selectedBlock, selectedFeeStatus],
+    queryKey: ['admin-students-roster', selectedFloor, selectedFeeStatus],
     queryFn: () =>
       api.getStudents({
-        block: selectedBlock,
+        floor: selectedFloor,
         feeStatus: selectedFeeStatus,
       }),
   })
@@ -47,11 +48,7 @@ export default function AdminStudentsPage() {
         const std = row.original
         return (
           <div className="flex items-center gap-3">
-            <img
-              src={std.avatar}
-              alt={std.name}
-              className="h-8 w-8 rounded-full object-cover ring-1 ring-border shrink-0"
-            />
+            <Avatar name={std.name} size="sm" className="shrink-0" />
             <div>
               <p className="font-semibold text-foreground text-xs sm:text-sm">
                 {std.name}
@@ -66,16 +63,19 @@ export default function AdminStudentsPage() {
     },
     {
       accessorKey: 'roomNumber',
-      header: 'Room & Block',
+      header: 'Room & Bed',
       cell: ({ row }) => {
         const std = row.original
+        const roomDisplay = std.roomNumber
+          ? `${std.roomNumber} · ${std.bedNumber || 'Bed 1'}`
+          : 'Unallocated'
         return (
           <div>
             <span className="font-bold text-foreground text-xs sm:text-sm font-mono">
-              {std.roomNumber}
+              {roomDisplay}
             </span>
             <p className="text-[11px] text-muted-foreground">
-              {std.bedNumber} • {std.blockName.split(' ')[0]}
+              {std.roomNumber ? (std.blockName || 'Block A (Newton)') : 'No active bed'}
             </p>
           </div>
         )
@@ -173,28 +173,31 @@ export default function AdminStudentsPage() {
           </div>
         </div>
 
-        {/* Global Filter Bar */}
+        {/* Global Filter Bar: Floor Dropdown and Fee Status */}
         <div className="flex flex-wrap items-center gap-2">
           <select
-            value={selectedBlock}
-            onChange={(e) => setSelectedBlock(e.target.value)}
-            className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            id="floor-select"
+            value={selectedFloor}
+            onChange={(e) => setSelectedFloor(e.target.value)}
+            className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-xs cursor-pointer"
           >
-            <option value="all">All Dorm Blocks</option>
-            <option value="Block A">Block A (Newton)</option>
-            <option value="Block B">Block B (Aryabhata)</option>
-            <option value="Block C">Block C (Ramanujan)</option>
-            <option value="Block D">Block D (Kalam)</option>
+            <option value="all">All Floors (Floors 1 – 5)</option>
+            <option value="1">Floor 1 (Rooms A-101 to A-106)</option>
+            <option value="2">Floor 2 (Rooms A-201 to A-206)</option>
+            <option value="3">Floor 3 (Rooms A-301 to A-306)</option>
+            <option value="4">Floor 4 (Rooms A-401 to A-406)</option>
+            <option value="5">Floor 5 (Rooms A-501 to A-506)</option>
           </select>
 
           <select
             value={selectedFeeStatus}
             onChange={(e) => setSelectedFeeStatus(e.target.value)}
-            className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-xs cursor-pointer"
           >
             <option value="all">All Fee Statuses</option>
             <option value="paid">Settled / Paid</option>
             <option value="pending">Due / Pending</option>
+            <option value="partial">Partial Payment</option>
             <option value="overdue">Overdue / Flagged</option>
           </select>
         </div>
@@ -207,6 +210,7 @@ export default function AdminStudentsPage() {
           searchKey="name"
           searchPlaceholder="Search student by name, roll no, or room..."
           isLoading={isLoading}
+          pageSize={15}
         />
       </div>
 
@@ -216,11 +220,7 @@ export default function AdminStudentsPage() {
           <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-6 animate-slide-up">
             <div className="flex items-start justify-between border-b border-border pb-4">
               <div className="flex items-center gap-3">
-                <img
-                  src={activeStudent.avatar}
-                  alt={activeStudent.name}
-                  className="h-12 w-12 rounded-full object-cover ring-2 ring-primary/20"
-                />
+                <Avatar name={activeStudent.name} size="lg" />
                 <div>
                   <h3 className="font-bold text-foreground text-base">
                     {activeStudent.name}
@@ -244,9 +244,9 @@ export default function AdminStudentsPage() {
                   Room Allocation
                 </span>
                 <p className="font-semibold text-foreground">
-                  {activeStudent.roomNumber} ({activeStudent.bedNumber})
+                  {activeStudent.roomNumber ? `${activeStudent.roomNumber} (${activeStudent.bedNumber})` : 'Unallocated'}
                 </p>
-                <p className="text-muted-foreground">{activeStudent.blockName}</p>
+                <p className="text-muted-foreground">{activeStudent.blockName || 'Block A (Newton)'}</p>
               </div>
 
               <div className="space-y-1 p-3 rounded-xl bg-muted/40">
@@ -283,7 +283,7 @@ export default function AdminStudentsPage() {
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setActiveStudent(null)}
-                className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors"
+                className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold text-xs"
               >
                 Close Dossier
               </button>

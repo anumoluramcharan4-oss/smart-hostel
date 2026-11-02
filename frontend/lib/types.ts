@@ -57,7 +57,7 @@ export interface Room {
   blockId: string
   blockName: string
   floor: number
-  type: 'single' | 'double' | 'triple'
+  type: 'single' | 'double' | 'triple' | 'quad'
   capacity: number
   occupied: number
   status: 'available' | 'occupied' | 'maintenance'
@@ -182,6 +182,16 @@ export interface WardenInfo {
   designation: string
   status: 'active' | 'on_duty' | 'on_leave'
   avatar?: string
+}
+
+export interface StaffMember {
+  id: string
+  name: string
+  role?: string
+  specialty?: string
+  phone: string
+  status?: string
+  activeJobs?: number
 }
 
 export type GrievanceCategory =

@@ -7,7 +7,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 
 from backend.app.db.session import engine, Base
-from backend.app.routers import visitors, assets, parcels, laundry, inspections
+from backend.app.routers import (
+    visitors,
+    assets,
+    parcels,
+    laundry,
+    inspections,
+    rooms,
+    students,
+    stats,
+)
 
 # Auto-create database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -28,13 +37,18 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "*",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routers under /api/v1
+# Register routers under /api/v1 and root
+app.include_router(rooms.router)
+app.include_router(students.router)
+app.include_router(stats.router)
+
 app.include_router(visitors.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
 app.include_router(parcels.router, prefix="/api/v1")

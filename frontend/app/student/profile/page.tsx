@@ -39,11 +39,13 @@ export default function StudentProfilePage() {
 
           <div>
             <h2 className="text-xl font-bold text-foreground">{user?.name}</h2>
-            <p className="text-xs font-mono text-muted-foreground mt-0.5">
-              Roll No: {user?.rollNo || '21BCS042'}
-            </p>
+            {user?.rollNo && (
+              <p className="text-xs font-mono text-muted-foreground mt-0.5">
+                Roll No: {user.rollNo}
+              </p>
+            )}
             <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <GraduationCap className="h-3.5 w-3.5" /> 3rd Year B.Tech
+              <GraduationCap className="h-3.5 w-3.5" /> {user?.year ? `Year ${user.year}` : 'Student'} {user?.course || ''}
             </span>
           </div>
 
@@ -88,20 +90,20 @@ export default function StudentProfilePage() {
               <div className="rounded-2xl bg-muted/40 p-3.5 border border-border/50">
                 <span className="text-muted-foreground">Hostel Block</span>
                 <p className="text-sm font-bold text-foreground mt-0.5">
-                  {user?.blockName}
+                  {user?.blockName || 'Assigned Block'}
                 </p>
                 <span className="text-[11px] text-muted-foreground">
-                  Chief Warden: Prof. Rajesh K. Sharma
+                  Status: Allotted & Active
                 </span>
               </div>
 
               <div className="rounded-2xl bg-muted/40 p-3.5 border border-border/50">
                 <span className="text-muted-foreground">Course & Dept</span>
                 <p className="text-sm font-bold text-foreground mt-0.5">
-                  {user?.course || 'Computer Science & Engineering'}
+                  {user?.course || 'Undergraduate Degree'}
                 </p>
                 <span className="text-[11px] text-muted-foreground">
-                  Semester 5 (Autumn 2026)
+                  {user?.year ? `Year ${user.year}` : 'Active Academic Year'}
                 </span>
               </div>
 
@@ -128,17 +130,17 @@ export default function StudentProfilePage() {
               <div className="rounded-2xl bg-muted/40 p-3.5 border border-border/50">
                 <span className="text-muted-foreground">Guardian Name</span>
                 <p className="text-sm font-bold text-foreground mt-0.5">
-                  {user?.emergencyContact?.name || 'Mukesh Patel'}
+                  {user?.emergencyContact?.name || 'Registered Guardian'}
                 </p>
                 <span className="text-[11px] text-muted-foreground">
-                  Relation: {user?.emergencyContact?.relation || 'Father'}
+                  Relation: {user?.emergencyContact?.relation || 'Primary Contact'}
                 </span>
               </div>
 
               <div className="rounded-2xl bg-muted/40 p-3.5 border border-border/50">
                 <span className="text-muted-foreground">Contact Number</span>
                 <p className="text-sm font-bold text-foreground mt-0.5">
-                  {user?.emergencyContact?.phone || '+91 98201 00099'}
+                  {user?.emergencyContact?.phone || 'Not Specified'}
                 </p>
                 <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
                   SMS & Call Alerts Active

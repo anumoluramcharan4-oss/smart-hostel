@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -22,15 +22,14 @@ import { Room, Student } from '@/lib/types'
 
 export default function AdminRoomsPage() {
   const queryClient = useQueryClient()
-  const [selectedBlockId, setSelectedBlockId] = useState('blk-a')
   const [selectedFloor, setSelectedFloor] = useState<number>(1)
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
   const [allocatingStudentId, setAllocatingStudentId] = useState('')
   const [allocatingBed, setAllocatingBed] = useState('Bed 1')
 
   const { data: rooms = [], isLoading: isLoadingRooms } = useQuery({
-    queryKey: ['admin-rooms', selectedBlockId, selectedFloor],
-    queryFn: () => api.getRooms({ blockId: selectedBlockId, floor: selectedFloor }),
+    queryKey: ['admin-rooms', selectedFloor],
+    queryFn: () => api.getRooms({ floor: selectedFloor }),
   })
 
   const { data: blocks = [] } = useQuery({
@@ -43,16 +42,41 @@ export default function AdminRoomsPage() {
     queryFn: () => api.getStudents(),
   })
 
+  // Vacant beds in the active modal room
+  const vacantBeds = useMemo(() => {
+    if (!activeRoom) return []
+    const occupied = (activeRoom.occupants || []).map((o) => o.bed)
+    const all = Array.from({ length: activeRoom.capacity || 4 }, (_, i) => `Bed ${i + 1}`)
+    return all.filter((b) => !occupied.includes(b))
+  }, [activeRoom])
+
+  // Filter unallocated students (students with no active room/bed assignment)
+  const unallocatedStudents = useMemo(() => {
+    return allStudents.filter((s) => !s.roomNumber || s.roomNumber.trim() === '')
+  }, [allStudents])
+
+  // Set default bed when room opens or vacant beds change
+  useEffect(() => {
+    if (vacantBeds.length > 0 && !vacantBeds.includes(allocatingBed)) {
+      setAllocatingBed(vacantBeds[0])
+    }
+  }, [vacantBeds, allocatingBed])
+
   // Allocate Room Mutation
   const allocateMutation = useMutation({
     mutationFn: ({ roomId, studentId, bed }: { roomId: string; studentId: string; bed: string }) =>
       api.allocateRoom(roomId, studentId, bed),
-    onSuccess: () => {
+    onSuccess: (updatedRoom) => {
       queryClient.invalidateQueries({ queryKey: ['admin-rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-students-for-allotment'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-students-roster'] })
       queryClient.invalidateQueries({ queryKey: ['blocks'] })
-      toast.success('Bed successfully assigned to resident')
-      setActiveRoom(null)
+      queryClient.invalidateQueries({ queryKey: ['sidebar-live-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+
+      setActiveRoom(updatedRoom)
       setAllocatingStudentId('')
+      toast.success('Bed successfully assigned to resident')
     },
     onError: (err: any) => {
       toast.error(err.message || 'Room allocation failed')
@@ -63,11 +87,16 @@ export default function AdminRoomsPage() {
   const deallocateMutation = useMutation({
     mutationFn: ({ roomId, studentId }: { roomId: string; studentId: string }) =>
       api.deallocateRoom(roomId, studentId),
-    onSuccess: () => {
+    onSuccess: (updatedRoom) => {
       queryClient.invalidateQueries({ queryKey: ['admin-rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-students-for-allotment'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-students-roster'] })
       queryClient.invalidateQueries({ queryKey: ['blocks'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-live-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+
+      setActiveRoom(updatedRoom)
       toast.success('Student deallocated from room successfully')
-      setActiveRoom(null)
     },
     onError: (err: any) => {
       toast.error(err.message || 'Deallocation failed')
@@ -87,49 +116,36 @@ export default function AdminRoomsPage() {
                 Room Allocation &amp; Floor Map
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Institutional bed assignment matrix, dormitory occupancy, and resident allocation.
+                Block A (Newton) • 5 Floors • 30 Rooms • 120 Beds • Quad Occupancy
               </p>
             </div>
           </div>
         </div>
 
-        {/* Block & Floor Controls */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Floor Dropdown Selector */}
+        <div className="flex items-center gap-3">
+          <label htmlFor="floor-select" className="text-xs font-bold text-foreground">
+            Select Floor:
+          </label>
           <select
-            value={selectedBlockId}
-            onChange={(e) => setSelectedBlockId(e.target.value)}
-            className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            id="floor-select"
+            value={selectedFloor}
+            onChange={(e) => setSelectedFloor(Number(e.target.value))}
+            className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-bold text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
           >
-            {blocks.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} ({b.occupied}/{b.capacity} beds)
-              </option>
-            ))}
+            <option value={1}>Floor 1 (Rooms A-101 to A-106)</option>
+            <option value={2}>Floor 2 (Rooms A-201 to A-206)</option>
+            <option value={3}>Floor 3 (Rooms A-301 to A-306)</option>
+            <option value={4}>Floor 4 (Rooms A-401 to A-406)</option>
+            <option value={5}>Floor 5 (Rooms A-501 to A-506)</option>
           </select>
-
-          <div className="flex items-center rounded-xl border border-border bg-muted/40 p-1">
-            {[1, 2, 3, 4].map((floor) => (
-              <button
-                key={floor}
-                onClick={() => setSelectedFloor(floor)}
-                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
-                  selectedFloor === floor
-                    ? 'bg-card text-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Floor {floor}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Grid of Rooms */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {/* Grid of Rooms (Exactly 6 rooms per floor) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {rooms.map((room) => {
           const isFull = room.occupied >= room.capacity
-          const isVacant = room.occupied === 0
           const hasMaintenance = room.status === 'maintenance'
 
           return (
@@ -140,8 +156,8 @@ export default function AdminRoomsPage() {
                 hasMaintenance
                   ? 'border-amber-500/30 bg-amber-500/5'
                   : isFull
-                  ? 'border-border bg-card'
-                  : 'border-primary/30 bg-primary/5 hover:border-primary/50'
+                  ? 'border-border bg-card hover:border-primary/50'
+                  : 'border-primary/40 bg-primary/5 hover:border-primary/70'
               }`}
             >
               <div className="flex items-start justify-between pb-3 border-b border-border">
@@ -150,39 +166,39 @@ export default function AdminRoomsPage() {
                     Room {room.number}
                   </h4>
                   <p className="text-[11px] text-muted-foreground capitalize">
-                    {room.type} Room
+                    {room.type} (4 Beds)
                   </p>
                 </div>
                 <StatusBadge
                   status={room.status}
                   label={
-                    room.status === 'occupied'
+                    isFull
                       ? 'FULL'
                       : room.status === 'available'
-                      ? `${room.capacity - room.occupied} BED LEFT`
+                      ? `${room.capacity - room.occupied} VACANT`
                       : 'MAINT'
                   }
                 />
               </div>
 
-              {/* Occupant Slots */}
+              {/* Occupant Slots (4 Beds) */}
               <div className="py-3 space-y-1.5">
-                {Array.from({ length: room.capacity }).map((_, idx) => {
-                  const occupant = room.occupants[idx]
+                {Array.from({ length: room.capacity || 4 }).map((_, idx) => {
+                  const occupant = (room.occupants || [])[idx]
                   return (
                     <div
                       key={idx}
                       className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-background/60 border border-border/40"
                     >
-                      <span className="text-[11px] font-mono text-muted-foreground">
+                      <span className="text-[10px] font-mono text-muted-foreground">
                         Bed {idx + 1}
                       </span>
                       {occupant ? (
-                        <span className="font-semibold text-foreground truncate max-w-[120px]">
+                        <span className="font-semibold text-foreground truncate max-w-[100px]" title={occupant.name}>
                           {occupant.name}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold uppercase">
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase">
                           Vacant
                         </span>
                       )}
@@ -191,10 +207,10 @@ export default function AdminRoomsPage() {
                 })}
               </div>
 
-              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>Occupancy: {room.occupied}/{room.capacity} Beds</span>
+              <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
+                <span>{room.occupied}/{room.capacity} Beds</span>
                 <span className="text-primary font-bold group-hover:underline">
-                  Manage Bed &rarr;
+                  Manage &rarr;
                 </span>
               </div>
             </div>
@@ -212,11 +228,14 @@ export default function AdminRoomsPage() {
                   Manage Room {activeRoom.number}
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Floor {activeRoom.floor} • Capacity: {activeRoom.capacity} Beds
+                  Floor {activeRoom.floor} • Quad Room ({activeRoom.occupied}/{activeRoom.capacity} Beds Occupied)
                 </p>
               </div>
               <button
-                onClick={() => setActiveRoom(null)}
+                onClick={() => {
+                  setActiveRoom(null)
+                  setAllocatingStudentId('')
+                }}
                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
               >
                 <X className="h-5 w-5" />
@@ -226,7 +245,7 @@ export default function AdminRoomsPage() {
             {/* Existing Occupants */}
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                Current Room Residents ({activeRoom.occupants.length}/{activeRoom.capacity})
+                Current Residents ({activeRoom.occupants.length}/{activeRoom.capacity})
               </h4>
               {activeRoom.occupants.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-2 italic">
@@ -242,7 +261,7 @@ export default function AdminRoomsPage() {
                       <div>
                         <p className="font-bold text-foreground">{occ.name}</p>
                         <p className="text-[11px] text-muted-foreground">
-                          {occ.bed} • Roll No: {occ.rollNo || occ.id}
+                          {occ.bed} • Roll No: {occ.rollNo || occ.id} • {occ.course}
                         </p>
                       </div>
                       <button
@@ -253,7 +272,7 @@ export default function AdminRoomsPage() {
                           })
                         }
                         disabled={deallocateMutation.isPending}
-                        className="px-2.5 py-1 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-[11px] font-semibold"
+                        className="px-2.5 py-1 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-[11px] font-semibold transition"
                       >
                         Deallocate
                       </button>
@@ -280,16 +299,15 @@ export default function AdminRoomsPage() {
                       className="w-full px-3 py-2 rounded-lg border border-border bg-background text-xs font-semibold"
                     >
                       <option value="">Choose resident...</option>
-                      {allStudents
-                        .filter(
-                          (s) =>
-                            !activeRoom.occupants.some((o) => o.id === s.id)
-                        )
-                        .map((s) => (
+                      {unallocatedStudents.length === 0 ? (
+                        <option value="" disabled>No unallocated students (100% full)</option>
+                      ) : (
+                        unallocatedStudents.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.name} ({s.rollNo})
+                            {s.name} ({s.rollNo || s.id})
                           </option>
-                        ))}
+                        ))
+                      )}
                     </select>
                   </div>
                   <div>
@@ -301,18 +319,22 @@ export default function AdminRoomsPage() {
                       onChange={(e) => setAllocatingBed(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg border border-border bg-background text-xs font-semibold"
                     >
-                      {Array.from({ length: activeRoom.capacity }).map((_, i) => (
-                        <option key={i} value={`Bed ${i + 1}`}>
-                          Bed {i + 1}
-                        </option>
-                      ))}
+                      {vacantBeds.length === 0 ? (
+                        <option value="" disabled>No vacant beds</option>
+                      ) : (
+                        vacantBeds.map((bed) => (
+                          <option key={bed} value={bed}>
+                            {bed} (Vacant)
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  disabled={!allocatingStudentId || allocateMutation.isPending}
+                  disabled={!allocatingStudentId || !allocatingBed || allocateMutation.isPending}
                   onClick={() =>
                     allocateMutation.mutate({
                       roomId: activeRoom.id,
@@ -320,7 +342,7 @@ export default function AdminRoomsPage() {
                       bed: allocatingBed,
                     })
                   }
-                  className="w-full py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition disabled:opacity-50"
+                  className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition disabled:opacity-50"
                 >
                   {allocateMutation.isPending ? 'Allocating...' : 'Confirm Bed Allocation'}
                 </button>

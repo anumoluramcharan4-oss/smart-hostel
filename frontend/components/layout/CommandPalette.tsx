@@ -32,7 +32,7 @@ interface CommandPaletteProps {
 export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const router = useRouter()
-  const { role, switchRole, logout } = useAuth()
+  const { role, logout } = useAuth()
   const { theme, setTheme } = useTheme()
 
   useEffect(() => {
@@ -96,33 +96,6 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   ]
 
   const actions = [
-    {
-      label: 'Switch Persona: Student (Aarav Patel)',
-      action: () => {
-        switchRole('student')
-        onClose()
-      },
-      icon: Sparkles,
-      color: 'text-indigo-400',
-    },
-    {
-      label: 'Switch Persona: Warden (Prof. Rajesh Sharma)',
-      action: () => {
-        switchRole('warden')
-        onClose()
-      },
-      icon: Sparkles,
-      color: 'text-saffron-400',
-    },
-    {
-      label: 'Switch Persona: Admin (Dr. Vikram Malhotra)',
-      action: () => {
-        switchRole('admin')
-        onClose()
-      },
-      icon: Sparkles,
-      color: 'text-teal-400',
-    },
     {
       label: `Switch Theme to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`,
       action: () => {

@@ -24,26 +24,11 @@ import {
   Trash2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Complaint, ComplaintPriority, ComplaintStatus } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
-
-const availableStaff = [
-  { id: 'staff-1', name: 'Rajesh Verma (Plumber)', phone: '+91 98765-43210' },
-  { id: 'staff-2', name: 'Manoj Sharma (Electrician)', phone: '+91 98765-43211' },
-  { id: 'staff-3', name: 'Suresh Patil (Network Engineer)', phone: '+91 98765-43212' },
-  { id: 'staff-4', name: 'Vikram Seth (Locksmith & Security)', phone: '+91 98765-43213' },
-  { id: 'staff-5', name: 'Anita Devi (Housekeeping)', phone: '+91 98765-43214' },
-]
-
-const HOSTEL_BLOCKS = [
-  'Block A (Newton)',
-  'Block B (Aryabhata)',
-  'Block C (Ramanujan)',
-  'Block D (Kalam)',
-  'Block E (Visvesvaraya)',
-]
 
 export default function WardenComplaintsPage() {
   const queryClient = useQueryClient()
@@ -51,9 +36,25 @@ export default function WardenComplaintsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [assigningTicket, setAssigningTicket] = useState<Complaint | null>(null)
-  const [selectedStaff, setSelectedStaff] = useState('Rajesh Verma (Plumber)')
+  const [selectedStaff, setSelectedStaff] = useState('')
   const [selectedPriority, setSelectedPriority] = useState<ComplaintPriority>('urgent')
   const [dispatchNote, setDispatchNote] = useState('')
+
+  // Dynamically load blocks & maintenance staff
+  const { data: blocksData = [] } = useQuery({
+    queryKey: ['hostel-blocks'],
+    queryFn: () => api.getBlocks(),
+  })
+
+  const { data: availableStaff = [] } = useQuery({
+    queryKey: ['hostel-staff'],
+    queryFn: () => api.getStaff(),
+  })
+
+  // Warden jurisdiction is strictly ONE assigned block: Block A (Newton)
+  const hostelBlocks = useMemo(() => {
+    return ['Block A (Newton)']
+  }, [])
 
   // Cross-tab real-time storage event sync
   useEffect(() => {
@@ -64,6 +65,27 @@ export default function WardenComplaintsPage() {
     }
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
+  }, [queryClient])
+
+  // Real-time Supabase subscription for complaints
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('warden-complaints-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'complaints' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
+          queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
+          queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [queryClient])
 
   const { data: complaints = [], isLoading } = useQuery({
@@ -79,38 +101,62 @@ export default function WardenComplaintsPage() {
       { total: number; pending: number; inProgress: number; urgent: number; high: number }
     > = {}
 
-    HOSTEL_BLOCKS.forEach((b) => {
+    hostelBlocks.forEach((b) => {
       stats[b] = { total: 0, pending: 0, inProgress: 0, urgent: 0, high: 0 }
     })
 
+    const isResolved = (s?: string) => {
+      const norm = String(s || '').toLowerCase().trim().replace(/[\s-]/g, '_')
+      return norm === 'resolved' || norm === 'closed' || norm === 'student_approved' || norm === 'completed'
+    }
+
+    const isInProgress = (s?: string) => {
+      const norm = String(s || '').toLowerCase().trim().replace(/[\s-]/g, '_')
+      return norm === 'in_progress' || norm === 'assigned' || norm === 'investigating' || norm === 'wip'
+    }
+
+    const isPending = (s?: string) => {
+      return !isResolved(s) && !isInProgress(s)
+    }
+
     complaints.forEach((c) => {
-      if (c.status === 'resolved') return
-      const matched = HOSTEL_BLOCKS.find(
-        (b) =>
-          c.blockName.toLowerCase().includes(b.toLowerCase()) ||
-          b.toLowerCase().includes(c.blockName.toLowerCase())
-      )
+      if (isResolved(c.status)) return
+      const compBlock = (c.blockName || '').toLowerCase().trim()
+      const roomLetter = (c.roomNumber || '').toUpperCase().charAt(0)
+      const matched = hostelBlocks.find((b) => {
+        const bLower = b.toLowerCase().trim()
+        const bLetter = b.replace('Block ', '').charAt(0).toUpperCase()
+        return (
+          compBlock.includes(bLower) ||
+          bLower.includes(compBlock) ||
+          compBlock === bLetter.toLowerCase() ||
+          compBlock.includes(`block ${bLetter.toLowerCase()}`) ||
+          compBlock.includes(`block-${bLetter.toLowerCase()}`) ||
+          roomLetter === bLetter
+        )
+      }) || hostelBlocks[0]
+
       if (matched) {
         if (!stats[matched]) {
           stats[matched] = { total: 0, pending: 0, inProgress: 0, urgent: 0, high: 0 }
         }
         stats[matched].total += 1
-        if (c.status === 'pending') stats[matched].pending += 1
-        if (c.status === 'in_progress') stats[matched].inProgress += 1
+        if (isPending(c.status)) stats[matched].pending += 1
+        if (isInProgress(c.status)) stats[matched].inProgress += 1
         if (c.priority === 'urgent') stats[matched].urgent += 1
         if (c.priority === 'high') stats[matched].high += 1
       }
     })
 
     return stats
-  }, [complaints])
+  }, [complaints, hostelBlocks])
 
   const blocksWithComplaints = useMemo(() => {
-    return HOSTEL_BLOCKS.filter((b) => (blockComplaintStats[b]?.total || 0) > 0).map((b) => ({
+    return hostelBlocks.filter((b) => (blockComplaintStats[b]?.total || 0) > 0).map((b) => ({
       block: b,
       ...blockComplaintStats[b],
     }))
-  }, [blockComplaintStats])
+  }, [blockComplaintStats, hostelBlocks])
 
 
   // Optimistic status transition mutation
@@ -188,28 +234,61 @@ export default function WardenComplaintsPage() {
     },
   })
 
+  const isResolvedStatus = (s?: string) => {
+    const norm = String(s || '').toLowerCase().trim().replace(/[\s-]/g, '_')
+    return norm === 'resolved' || norm === 'closed' || norm === 'student_approved' || norm === 'completed'
+  }
+
+  const isInProgressStatus = (s?: string) => {
+    const norm = String(s || '').toLowerCase().trim().replace(/[\s-]/g, '_')
+    return norm === 'in_progress' || norm === 'assigned' || norm === 'investigating' || norm === 'wip'
+  }
+
+  const isPendingStatus = (s?: string) => {
+    return !isResolvedStatus(s) && !isInProgressStatus(s)
+  }
+
   const filtered = complaints.filter((c) => {
-    // Scoped block access: Warden only sees complaints for their active block
-    const matchesBlock =
+    // Warden jurisdiction is strictly Block A (Newton) - single building architecture
+    const isAllBlocks =
       !selectedBlock ||
-      c.blockName.toLowerCase().includes(selectedBlock.toLowerCase()) ||
-      selectedBlock.toLowerCase().includes(c.blockName.toLowerCase())
+      selectedBlock === 'All Blocks' ||
+      selectedBlock.toLowerCase().includes('block a') ||
+      selectedBlock.toLowerCase().includes('newton')
+    let matchesBlock = isAllBlocks
+
+    if (!isAllBlocks) {
+      const compBlock = (c.blockName || '').toLowerCase().trim()
+      const targetBlock = selectedBlock.toLowerCase().trim()
+      matchesBlock =
+        compBlock.includes(targetBlock) ||
+        targetBlock.includes(compBlock) ||
+        compBlock.includes('block a') ||
+        compBlock.includes('newton') ||
+        (c.roomNumber || '').toUpperCase().startsWith('A-')
+    }
 
     const matchesCategory =
-      categoryFilter === 'all' || c.category === categoryFilter
+      categoryFilter === 'all' ||
+      (c.category || '').toLowerCase() === categoryFilter.toLowerCase()
+
+    const q = searchQuery.toLowerCase().trim()
     const matchesSearch =
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.studentName && c.studentName.toLowerCase().includes(searchQuery.toLowerCase()))
+      !q ||
+      (c.title || '').toLowerCase().includes(q) ||
+      (c.description || '').toLowerCase().includes(q) ||
+      (c.roomNumber || '').toLowerCase().includes(q) ||
+      (c.id || '').toLowerCase().includes(q) ||
+      (c.studentName || '').toLowerCase().includes(q) ||
+      (c.blockName || '').toLowerCase().includes(q)
 
     return matchesBlock && matchesCategory && matchesSearch
   })
 
-  // Columns for Kanban
-  const pendingItems = filtered.filter((c) => c.status === 'pending')
-  const inProgressItems = filtered.filter((c) => c.status === 'in_progress')
-  const resolvedItems = filtered.filter((c) => c.status === 'resolved')
+  // Columns for Kanban - Every ticket is guaranteed to be placed into one of the 3 stages
+  const pendingItems = filtered.filter((c) => isPendingStatus(c.status))
+  const inProgressItems = filtered.filter((c) => isInProgressStatus(c.status))
+  const resolvedItems = filtered.filter((c) => isResolvedStatus(c.status))
 
   const columns: {
     status: ComplaintStatus
@@ -252,199 +331,38 @@ export default function WardenComplaintsPage() {
         subtitle="Manage facility tickets across hostel blocks. Assign technicians, track SLA progress, and sign off completed repairs."
       />
 
-      {/* POPUP / HIGHLIGHTER: Active Block Complaints Banner */}
-      {blocksWithComplaints.length > 0 ? (
-        <div className="relative overflow-hidden rounded-3xl border-2 border-rose-500/40 bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-orange-500/10 p-5 shadow-lg shadow-rose-500/5 backdrop-blur-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-md shadow-rose-500/30">
-                <Flame className="h-6 w-6 animate-pulse" />
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-600 border-2 border-white text-[9px] font-bold text-white items-center justify-center">
-                    !
-                  </span>
-                </span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base font-extrabold text-foreground tracking-tight flex items-center gap-2">
-                    <span>🚨 Live Defect Alert:</span>
-                    <span className="text-rose-600 dark:text-rose-400">
-                      Complaints Active in {blocksWithComplaints.length} Hostel Block{blocksWithComplaints.length > 1 ? 's' : ''}
-                    </span>
-                  </h3>
-                  <span className="rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 px-2.5 py-0.5 text-[11px] font-bold animate-pulse">
-                    Action Required
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  The system highlighted the blocks with open tickets below. Click on any block badge to jump directly into its inspection view:
-                </p>
-              </div>
-            </div>
-
-            {/* Quick-Jump Block Badges */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0">
-              {blocksWithComplaints.map((b) => {
-                const isCurrent = selectedBlock === b.block
-                return (
-                  <button
-                    key={b.block}
-                    onClick={() => {
-                      setSelectedBlock(b.block)
-                      toast.info(`Switched view to ${b.block}`)
-                    }}
-                    className={`group inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-bold transition-all shadow-sm ${
-                      isCurrent
-                        ? 'bg-rose-600 text-white ring-4 ring-rose-500/20 shadow-rose-500/30 scale-105'
-                        : 'bg-card hover:bg-rose-50 dark:hover:bg-rose-950/40 text-foreground border border-rose-300 dark:border-rose-800 hover:border-rose-500'
-                    }`}
-                  >
-                    <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-                    <span>{b.block}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                        isCurrent
-                          ? 'bg-white/20 text-white'
-                          : b.urgent > 0
-                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300'
-                      }`}
-                    >
-                      {b.total} Active {b.urgent > 0 ? `(${b.urgent} Urgent)` : ''}
-                    </span>
-                    {isCurrent ? (
-                      <span className="text-[10px] uppercase tracking-wider bg-white/25 px-1.5 py-0.2 rounded font-black">
-                        Viewing
-                      </span>
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* 5-Block Interactive Highlighter Grid & Selector */}
+      {/* Warden Single Assigned Block Jurisdiction Banner */}
       <div className="space-y-3 p-5 rounded-3xl bg-card border border-border shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <Building2 className="h-5 w-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-lg">
+              A
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-foreground">
-                  Hostel Block Selector & Status Radar:
+                <h3 className="text-base font-bold text-foreground">
+                  Assigned Jurisdiction: Block A (Newton)
                 </h3>
-                <span className="rounded-full bg-primary/15 text-primary text-xs font-extrabold px-3 py-0.5">
-                  Currently Viewing: {selectedBlock}
+                <span className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold px-3 py-0.5 border border-emerald-500/20">
+                  Prof. Rajesh K. Sharma • Resident In-charge
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Real-time defect tracking per block. Blocks with open tickets are highlighted with red/amber badges.
+                Maintenance triage locked to Block A (Newton) — Undergrad Men&apos;s Wing.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">
-              Quick Switch:
-            </label>
-            <select
-              value={selectedBlock}
-              onChange={(e) => setSelectedBlock(e.target.value)}
-              className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-bold text-foreground focus:border-primary focus:outline-none"
-            >
-              {HOSTEL_BLOCKS.map((blk) => {
-                const count = blockComplaintStats[blk]?.total || 0
-                return (
-                  <option key={blk} value={blk}>
-                    {blk} {count > 0 ? `— 🚨 (${count} active)` : '— ✓ (Clear)'}
-                  </option>
-                )
-              })}
-            </select>
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-2xl bg-muted/40 border border-border/60 px-4 py-2 text-right">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Supervised Block</span>
+              <p className="text-xs font-black text-foreground">Block A (Newton)</p>
+            </div>
+            <div className="rounded-2xl bg-primary/10 border border-primary/20 px-4 py-2 text-right">
+              <span className="text-[10px] text-primary uppercase font-bold tracking-wider">Queue</span>
+              <p className="text-xs font-black text-primary">{filtered.length} Active Tickets</p>
+            </div>
           </div>
-        </div>
-
-        {/* 5-Block Status Cards (Highlighter) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
-          {HOSTEL_BLOCKS.map((blk) => {
-            const stats = blockComplaintStats[blk] || { total: 0, pending: 0, inProgress: 0, urgent: 0 }
-            const hasIssues = stats.total > 0
-            const isSelected = selectedBlock === blk
-            const letter = blk.replace('Block ', '').charAt(0)
-
-            return (
-              <button
-                key={blk}
-                onClick={() => setSelectedBlock(blk)}
-                className={`text-left rounded-2xl p-3.5 transition-all relative overflow-hidden flex flex-col justify-between border ${
-                  isSelected
-                    ? 'ring-2 ring-primary border-primary shadow-md bg-primary/5'
-                    : hasIssues
-                    ? 'border-rose-400 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-950/20 hover:border-rose-500'
-                    : 'border-border bg-card hover:border-border/80'
-                }`}
-              >
-                {/* Top: Letter & Indicator */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`flex h-7 w-7 items-center justify-center rounded-xl font-extrabold text-xs ${
-                        hasIssues
-                          ? 'bg-rose-500 text-white shadow-sm'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {letter}
-                    </span>
-                    <span className="text-xs font-bold text-foreground truncate max-w-[110px]">
-                      {blk}
-                    </span>
-                  </div>
-
-                  {hasIssues && (
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Bottom: Count Badges & Status */}
-                <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between text-xs">
-                  {hasIssues ? (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="rounded-full bg-rose-500/15 text-rose-700 dark:text-rose-400 px-2 py-0.5 text-[10px] font-black">
-                        🚨 {stats.total} Active
-                      </span>
-                      {stats.urgent > 0 && (
-                        <span className="rounded-full bg-red-600 text-white px-1.5 py-0.2 text-[9px] font-black animate-pulse">
-                          {stats.urgent} Urgent
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> All Clear
-                    </span>
-                  )}
-
-                  {isSelected && (
-                    <span className="text-[10px] font-extrabold text-primary uppercase tracking-wider">
-                      Active
-                    </span>
-                  )}
-                </div>
-              </button>
-            )
-          })}
         </div>
       </div>
 
@@ -514,12 +432,13 @@ export default function WardenComplaintsPage() {
                     className="rounded-2xl border border-border/80 bg-card p-4 space-y-3 hover:border-primary/50 shadow-sm transition-all"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                          {ticket.roomNumber}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 font-bold text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-lg">
+                          <Building2 className="h-3 w-3" />
+                          {ticket.blockName || 'Block A (Newton)'} • Room {ticket.roomNumber}
                         </span>
                         <span className="font-mono text-[10px] text-muted-foreground">
-                          {ticket.id}
+                          #{ticket.id.slice(0, 8)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -778,12 +697,13 @@ export default function WardenComplaintsPage() {
                 type="button"
                 disabled={updateStatusMutation.isPending}
                 onClick={() => {
+                  const staffToAssign = selectedStaff || availableStaff[0]?.name || 'Technician'
                   updateStatusMutation.mutate({
                     id: assigningTicket.id,
                     status: 'in_progress',
-                    assignedTo: selectedStaff,
+                    assignedTo: staffToAssign,
                     priority: selectedPriority,
-                    note: dispatchNote || `Assigned to ${selectedStaff} by Warden`,
+                    note: dispatchNote || `Assigned to ${staffToAssign} by Warden`,
                   })
                 }}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 transition-all flex items-center gap-1.5 disabled:opacity-50"

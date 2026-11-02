@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { createClient } from '@/lib/supabase/client'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -33,55 +34,12 @@ import {
   Complaint,
   ComplaintCategory,
   ComplaintPriority,
+  ComplaintStatus,
   WardenGrievance,
   GrievanceCategory,
 } from '@/lib/types'
 import { formatDate, formatTime } from '@/lib/utils'
 import { determineAutoPriority } from '@/lib/priority-helper'
-
-const HOSTEL_BLOCKS = [
-  'Block A (Newton)',
-  'Block B (Aryabhata)',
-  'Block C (Ramanujan)',
-  'Block D (Kalam)',
-  'Block E (Visvesvaraya)',
-]
-
-const BLOCK_TO_WARDEN: Record<
-  string,
-  { name: string; designation: string; phone: string; email: string }
-> = {
-  'Block A (Newton)': {
-    name: 'Prof. Rajesh K. Sharma',
-    designation: 'Senior Resident Warden',
-    phone: '+91 98111 22334',
-    email: 'rajesh.sharma@hostelos.edu',
-  },
-  'Block B (Aryabhata)': {
-    name: 'Dr. Meenakshi Sundaram',
-    designation: 'Associate Warden',
-    phone: '+91 98111 22335',
-    email: 'meenakshi.s@hostelos.edu',
-  },
-  'Block C (Ramanujan)': {
-    name: 'Dr. Alok Nath Mukherjee',
-    designation: 'Resident Warden',
-    phone: '+91 98111 22336',
-    email: 'alok.mukherjee@hostelos.edu',
-  },
-  'Block D (Kalam)': {
-    name: 'Prof. Ananya Sen',
-    designation: 'Resident Warden',
-    phone: '+91 98111 22337',
-    email: 'ananya.sen@hostelos.edu',
-  },
-  'Block E (Visvesvaraya)': {
-    name: 'Prof. K. R. Rao',
-    designation: 'Senior Warden & Safety Officer',
-    phone: '+91 98111 22338',
-    email: 'kr.rao@hostelos.edu',
-  },
-}
 
 const complaintSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
@@ -102,8 +60,46 @@ export default function StudentComplaintsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Dynamically load blocks & wardens from database / API
+  const { data: blocksData = [] } = useQuery({
+    queryKey: ['hostel-blocks'],
+    queryFn: () => api.getBlocks(),
+  })
+
+  const { data: wardensData = [] } = useQuery({
+    queryKey: ['hostel-wardens'],
+    queryFn: () => api.getWardens(),
+  })
+
+  const hostelBlocks = useMemo(() => {
+    return ['Block A (Newton)']
+  }, [])
+
+  const blockToWarden = useMemo(() => {
+    const map: Record<string, { name: string; designation: string; phone: string; email: string }> = {}
+    blocksData.forEach((b) => {
+      const w = wardensData.find((wrd) => wrd.assignedBlockId === b.id || wrd.assignedBlockName === b.name)
+      if (w) {
+        map[b.name] = {
+          name: w.name,
+          designation: w.designation,
+          phone: w.phone,
+          email: w.email,
+        }
+      } else if (b.wardenName) {
+        map[b.name] = {
+          name: b.wardenName,
+          designation: 'Resident Warden',
+          phone: '+91 98111 22334',
+          email: 'warden@hostelos.edu',
+        }
+      }
+    })
+    return map
+  }, [blocksData, wardensData])
+
   // Grievance form state - Block determines the exact warden automatically
-  const [grievanceBlock, setGrievanceBlock] = useState(user?.blockName || HOSTEL_BLOCKS[0])
+  const [grievanceBlock, setGrievanceBlock] = useState(user?.blockName || 'Block A (Newton)')
   const [grievanceRoom, setGrievanceRoom] = useState(user?.roomNumber || 'A-204')
   const [grievanceCategory, setGrievanceCategory] = useState<GrievanceCategory>('misconduct')
   const [grievanceSubject, setGrievanceSubject] = useState('')
@@ -111,8 +107,16 @@ export default function StudentComplaintsPage() {
 
   // Automatically derive the designated warden for the chosen block
   const currentAssignedWarden =
-    BLOCK_TO_WARDEN[grievanceBlock] || BLOCK_TO_WARDEN['Block A (Newton)']
+    blockToWarden[grievanceBlock] ||
+    Object.values(blockToWarden)[0] || {
+      name: 'Prof. Rajesh K. Sharma',
+      designation: 'Senior Resident Warden',
+      phone: '+91 98111 22334',
+      email: 'rajesh.sharma@hostelos.edu',
+    }
 
+
+  const supabase = useMemo(() => createClient(), [])
 
   // Cross-tab real-time storage event sync
   useEffect(() => {
@@ -129,11 +133,75 @@ export default function StudentComplaintsPage() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [queryClient])
 
-  // Facility tickets query
-  const { data: complaints = [], isLoading } = useQuery({
+  // Real-time Supabase subscription for complaints table
+  useEffect(() => {
+    const channel = supabase
+      .channel('student-complaints-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'complaints' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, queryClient])
+
+  // Facility tickets query from Supabase complaints table
+  // (Row Level Security handles ensuring students see only their own complaints)
+  const {
+    data: complaints = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['student-complaints', user?.id],
-    queryFn: () => api.getComplaints({ studentId: user?.id || 'usr-student-1' }),
-    refetchInterval: 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('complaints')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        throw error
+      }
+
+      return (data || []).map((row: any): Complaint => ({
+        id: String(row.id),
+        title: row.title || 'Untitled Complaint',
+        description: row.description || '',
+        category: (row.category || 'other') as ComplaintCategory,
+        priority: (row.priority || 'medium') as ComplaintPriority,
+        status: (row.status || 'pending') as ComplaintStatus,
+        studentId: row.student_id || row.studentId || user?.id || '',
+        studentName: row.student_name || row.studentName || user?.name || 'Student',
+        roomNumber: row.room_number || row.roomNumber || user?.roomNumber || 'Room --',
+        blockName: row.block_name || row.blockName || user?.blockName || 'Hostel Block',
+        createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+        updatedAt: row.updated_at || row.updatedAt || row.created_at || new Date().toISOString(),
+        assignedTo: row.assigned_to || row.assignedTo,
+        resolutionNotes: row.resolution_notes || row.resolutionNotes,
+        studentApproved: row.status === 'student_approved' || Boolean(row.student_approved),
+        studentApprovalNote: row.student_approval_note || row.studentApprovalNote,
+        timeline: Array.isArray(row.timeline)
+          ? row.timeline
+          : row.created_at
+          ? [
+              {
+                status: (row.status || 'pending') as ComplaintStatus,
+                timestamp: row.created_at,
+                note: `Complaint registered: ${row.title || 'Issue'}`,
+              },
+            ]
+          : [],
+      }))
+    },
+    refetchInterval: 3000,
   })
 
   // Confidential warden grievances query (Student only views their own direct reports)
@@ -157,7 +225,7 @@ export default function StudentComplaintsPage() {
     resolver: zodResolver(complaintSchema),
     defaultValues: {
       category: 'electrical',
-      blockName: user?.blockName || HOSTEL_BLOCKS[0],
+      blockName: user?.blockName || hostelBlocks[0] || 'Block A (Newton)',
       roomNumber: user?.roomNumber || 'A-204',
     },
   })
@@ -170,8 +238,9 @@ export default function StudentComplaintsPage() {
 
   // Facility ticket creation mutation
   const createMutation = useMutation({
-    mutationFn: (newComplaint: Omit<Complaint, 'id' | 'createdAt' | 'updatedAt' | 'timeline'>) =>
-      api.createComplaint(newComplaint),
+    mutationFn: async (newComplaint: Omit<Complaint, 'id' | 'createdAt' | 'updatedAt' | 'timeline'>) => {
+      return api.createComplaint(newComplaint)
+    },
     onMutate: async (newComplaint) => {
       const currentStudentId = user?.id || 'usr-student-1'
       await queryClient.cancelQueries({ queryKey: ['student-complaints', currentStudentId] })
@@ -214,9 +283,12 @@ export default function StudentComplaintsPage() {
       const currentStudentId = user?.id || 'usr-student-1'
       queryClient.invalidateQueries({ queryKey: ['student-complaints', currentStudentId] })
       queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-complaints-list'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
     },
@@ -250,9 +322,12 @@ export default function StudentComplaintsPage() {
       const currentStudentId = user?.id || 'usr-student-1'
       queryClient.invalidateQueries({ queryKey: ['student-complaints', currentStudentId] })
       queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-complaints-list'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
     },
@@ -284,10 +359,12 @@ export default function StudentComplaintsPage() {
       const currentStudentId = user?.id || 'usr-student-1'
       queryClient.invalidateQueries({ queryKey: ['student-complaints', currentStudentId] })
       queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-complaints-list'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
     },
     onError: () => {
       toast.error('Failed to approve resolution. Please try again.')
@@ -302,10 +379,12 @@ export default function StudentComplaintsPage() {
       const currentStudentId = user?.id || 'usr-student-1'
       queryClient.invalidateQueries({ queryKey: ['student-complaints', currentStudentId] })
       queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-complaints-list'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
+      queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
     },
     onError: () => {
       toast.error('Failed to reopen ticket.')
@@ -352,9 +431,9 @@ export default function StudentComplaintsPage() {
     const matchesCategory =
       selectedCategory === 'all' || c.category === selectedCategory
     const matchesSearch =
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase())
+      (c.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(c.id || '').toLowerCase().includes(searchQuery.toLowerCase())
     return matchesCategory && matchesSearch
   })
 
@@ -448,6 +527,20 @@ export default function StudentComplaintsPage() {
               <div className="h-32 rounded-3xl bg-card border border-border animate-pulse" />
               <div className="h-32 rounded-3xl bg-card border border-border animate-pulse" />
             </div>
+          ) : isError ? (
+            <EmptyState
+              icon={AlertCircle}
+              title="Failed to load complaints"
+              description={
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to retrieve complaints from Supabase. Please check your connection and try again.'
+              }
+              action={{
+                label: 'Retry',
+                onClick: () => refetch(),
+              }}
+            />
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={Wrench}
@@ -734,7 +827,7 @@ export default function StudentComplaintsPage() {
                     {...register('blockName')}
                     className="w-full rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    {HOSTEL_BLOCKS.map((blk) => (
+                    {hostelBlocks.map((blk) => (
                       <option key={blk} value={blk}>
                         {blk}
                       </option>
@@ -899,7 +992,7 @@ export default function StudentComplaintsPage() {
                     onChange={(e) => setGrievanceBlock(e.target.value)}
                     className="w-full rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    {HOSTEL_BLOCKS.map((b) => (
+                    {hostelBlocks.map((b) => (
                       <option key={b} value={b}>
                         {b}
                       </option>

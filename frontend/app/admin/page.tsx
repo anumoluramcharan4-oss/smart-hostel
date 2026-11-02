@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import NextLink from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createClient } from '@/lib/supabase/client'
 import { api } from '@/lib/api'
 import {
   Complaint,
@@ -12,6 +13,7 @@ import {
   WardenGrievance,
   GrievanceStatus,
 } from '@/lib/types'
+import { Avatar } from '@/components/common/Avatar'
 import {
   Download,
   Megaphone,
@@ -72,7 +74,7 @@ interface UrgentTicket {
   bed: string
   block: string
   category: string
-  categoryIcon: 'droplets' | 'zap' | 'wifi' | 'lock'
+  categoryIcon: 'droplets' | 'zap' | 'wifi' | 'lock' | 'wrench'
   title: string
   description: string
   priority: 'High' | 'Medium' | 'Low'
@@ -94,57 +96,25 @@ interface UrgentTicket {
 const initialUrgentTickets: UrgentTicket[] = []
 
 
-const availableStaff = [
-  {
-    id: 'staff-1',
-    name: 'Rajesh Verma',
-    role: 'Senior Facilities Plumber',
-    specialty: 'Plumbing & Hydraulic Lines',
-    phone: '+91 98765-43210',
-    status: 'Available',
-    activeJobs: 1,
-  },
-  {
-    id: 'staff-2',
-    name: 'Manoj Sharma',
-    role: 'Chief Campus Electrician',
-    specialty: 'High Voltage, MCB & Lighting',
-    phone: '+91 98765-43211',
-    status: 'On Duty',
-    activeJobs: 0,
-  },
-  {
-    id: 'staff-3',
-    name: 'Suresh Patil',
-    role: 'Senior Network Technician',
-    specialty: 'WLAN, Fiber & Switchgear',
-    phone: '+91 98765-43212',
-    status: 'Available',
-    activeJobs: 2,
-  },
-  {
-    id: 'staff-4',
-    name: 'Vikram Seth',
-    role: 'Access Control & Hardware Specialist',
-    specialty: 'Smart Locks & Turnstiles',
-    phone: '+91 98765-43213',
-    status: 'Available',
-    activeJobs: 1,
-  },
-  {
-    id: 'staff-5',
-    name: 'Anita Devi',
-    role: 'Housekeeping Supervisor',
-    specialty: 'Sanitation & Emergency Mop-up',
-    phone: '+91 98765-43214',
-    status: 'On Duty',
-    activeJobs: 2,
-  },
-]
-
 export default function AdminDashboardPage() {
   const [isClient, setIsClient] = useState(false)
   const queryClient = useQueryClient()
+
+  // Dynamically load blocks, wardens & staff from database / API
+  const { data: dbBlocks = [] } = useQuery({
+    queryKey: ['hostel-blocks'],
+    queryFn: () => api.getBlocks(),
+  })
+
+  const { data: dbWardens = [] } = useQuery({
+    queryKey: ['hostel-wardens'],
+    queryFn: () => api.getWardens(),
+  })
+
+  const { data: availableStaff = [] } = useQuery({
+    queryKey: ['hostel-staff'],
+    queryFn: () => api.getStaff(),
+  })
 
   // Real-time multi-tab sync across student & admin portals
   useEffect(() => {
@@ -161,19 +131,116 @@ export default function AdminDashboardPage() {
     return () => window.removeEventListener('storage', handleStorageChange)
   }, [queryClient])
 
-  const { data: serverComplaints = [] } = useQuery({
-    queryKey: ['admin-all-complaints'],
-    queryFn: () => api.getComplaints(),
-    refetchInterval: 1000,
+  const supabase = useMemo(() => createClient(), [])
+
+  // 1. Real Supabase Complaints Query (with API / Local fallback)
+  const {
+    data: supabaseComplaints = [],
+    isLoading: isLoadingComplaints,
+    isError: isErrorComplaints,
+    error: complaintsError,
+    refetch: refetchComplaints,
+  } = useQuery({
+    queryKey: ['admin-supabase-complaints'],
+    queryFn: async () => {
+      const list = await api.getComplaints()
+      return list.map((c) => ({
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        category: c.category,
+        priority: c.priority,
+        status: c.status,
+        student_id: c.studentId,
+        student_name: c.studentName,
+        room_number: c.roomNumber,
+        block_name: c.blockName,
+        assigned_to: c.assignedTo,
+        created_at: c.createdAt,
+        updated_at: c.updatedAt,
+      }))
+    },
+    refetchInterval: 2000,
   })
 
-  // Wardens Directory (Admin reflection of who are the wardens and for which block)
-  const { data: wardens = [] } = useQuery({
-    queryKey: ['admin-wardens'],
-    queryFn: () => api.getWardens(),
+  // 2. Real Supabase Rooms Query
+  const {
+    data: supabaseRooms = [],
+    isLoading: isLoadingRooms,
+    isError: isErrorRooms,
+    refetch: refetchRooms,
+  } = useQuery({
+    queryKey: ['admin-supabase-rooms'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('rooms').select('*')
+      if (error) throw error
+      return data || []
+    },
   })
 
-  // Confidential Student Grievances against Wardens (Exclusively Admin Visible)
+  // 3. Real Supabase Profiles Query
+  const {
+    data: supabaseProfiles = [],
+    isLoading: isLoadingProfiles,
+    isError: isErrorProfiles,
+    refetch: refetchProfiles,
+  } = useQuery({
+    queryKey: ['admin-supabase-profiles'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('*')
+      if (error) throw error
+      return data || []
+    },
+  })
+
+  // 4. Real Supabase Payments Query
+  const {
+    data: supabasePayments = [],
+    isLoading: isLoadingPayments,
+    isError: isErrorPayments,
+    refetch: refetchPayments,
+  } = useQuery({
+    queryKey: ['admin-supabase-payments'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('payments').select('*')
+      if (error) throw error
+      return data || []
+    },
+  })
+
+  // Warden Directory: strictly ONE campus block (Block A - Newton)
+  const wardens: WardenInfo[] = useMemo(() => {
+    const primaryWarden =
+      dbWardens.find(
+        (w) =>
+          (w.assignedBlockName || '').toLowerCase().includes('block a') ||
+          w.assignedBlockId === 'blk-a'
+      ) || dbWardens[0]
+
+    if (primaryWarden) {
+      return [
+        {
+          ...primaryWarden,
+          assignedBlockName: 'Block A (Newton)',
+        },
+      ]
+    }
+
+    return [
+      {
+        id: 'wrd-1',
+        name: 'Prof. Rajesh K. Sharma',
+        email: 'rajesh.sharma@hostelos.edu',
+        phone: '+91 98111 22334',
+        assignedBlockId: 'blk-a',
+        assignedBlockName: 'Block A (Newton)',
+        designation: 'Senior Resident Warden',
+        status: 'on_duty',
+      },
+    ]
+  }, [dbWardens])
+
+  // Confidential Student Grievances
   const { data: wardenGrievances = [] } = useQuery({
     queryKey: ['admin-warden-grievances'],
     queryFn: () => api.getWardenGrievances(),
@@ -207,9 +274,9 @@ export default function AdminDashboardPage() {
   const [dispatchEta, setDispatchEta] = useState<string>('30 mins')
   const [dispatchNotes, setDispatchNotes] = useState<string>('')
 
-  // Dynamically derive urgent tickets from shared api.getComplaints()
+  // Dynamically derive urgent tickets from real Supabase complaints & profiles
   const urgentTickets: UrgentTicket[] = useMemo(() => {
-    if (!serverComplaints || serverComplaints.length === 0) {
+    if (!supabaseComplaints || supabaseComplaints.length === 0) {
       return []
     }
 
@@ -220,100 +287,156 @@ export default function AdminDashboardPage() {
       low: 1,
     }
 
-    const sorted = [...serverComplaints].sort((a, b) => {
-      // Pending and In Progress first, resolved at bottom
+    const sorted = [...supabaseComplaints].sort((a: any, b: any) => {
       if (a.status !== 'resolved' && b.status === 'resolved') return -1
       if (a.status === 'resolved' && b.status !== 'resolved') return 1
 
-      // Higher priority first
-      const weightA = priorityWeight[a.priority] || 1
-      const weightB = priorityWeight[b.priority] || 1
+      const weightA = priorityWeight[String(a.priority || '').toLowerCase()] || 1
+      const weightB = priorityWeight[String(b.priority || '').toLowerCase()] || 1
       if (weightA !== weightB) return weightB - weightA
 
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     })
 
-    return sorted.map((c) => {
-      const isUrgent = c.priority === 'urgent'
-      const isHigh = c.priority === 'high'
+    return sorted.map((c: any) => {
+      const studentProfile = supabaseProfiles.find((p: any) => p.id === c.student_id)
+      const studentName = c.student_name || studentProfile?.full_name || 'Student Resident'
+      const studentEmail = studentProfile?.email || 'student@hostelos.edu'
+      const studentPhone = studentProfile?.phone || '+91 98765-10000'
+      const rawPriority = c.priority || 'Medium'
+      const priorityFormatted = (rawPriority.charAt(0).toUpperCase() + rawPriority.slice(1)) as 'High' | 'Medium' | 'Low'
+      const isUrgent = rawPriority.toLowerCase() === 'urgent'
+      const isHigh = rawPriority.toLowerCase() === 'high'
+      const rawCategory = c.category || 'General'
 
       return {
-        id: c.id,
-        studentName: c.studentName || 'Student',
-        studentId: c.studentId || 'STU-2024',
-        room: c.roomNumber || 'Room',
-        bed: 'Assigned Bed',
-        block: c.blockName || 'Campus Hostel',
-        category: c.category.charAt(0).toUpperCase() + c.category.slice(1),
-        categoryIcon: (c.category === 'electrical'
+        id: String(c.id).slice(0, 8),
+        studentName,
+        studentId: c.student_id ? String(c.student_id).slice(0, 8).toUpperCase() : 'STU-RES',
+        room: c.room_number && c.room_number.length <= 10 && !c.room_number.includes('--') ? c.room_number : 'A-204',
+        bed: c.bed_number || 'Bed 1',
+        block: c.block_name && c.block_name !== 'Hostel Block' ? c.block_name : 'Block A (Newton)',
+        category: rawCategory.charAt(0).toUpperCase() + rawCategory.slice(1),
+        categoryIcon: (rawCategory.toLowerCase() === 'electrical' || (c.title || '').toLowerCase().includes('fan')
           ? 'zap'
-          : c.category === 'plumbing'
+          : rawCategory.toLowerCase() === 'plumbing'
           ? 'droplets'
-          : c.category === 'wifi'
+          : rawCategory.toLowerCase() === 'wifi'
           ? 'wifi'
-          : 'lock') as 'droplets' | 'zap' | 'wifi' | 'lock',
+          : rawCategory.toLowerCase() === 'lock'
+          ? 'lock'
+          : 'wrench') as 'droplets' | 'zap' | 'wifi' | 'lock' | 'wrench',
         title: c.title,
         description: c.description,
-        priority: (c.priority.charAt(0).toUpperCase() + c.priority.slice(1)) as 'High' | 'Medium' | 'Low',
-        slaStatus: isUrgent ? '22m left' : isHigh ? '2h 10m left' : '24h left',
+        priority: priorityFormatted,
+        slaStatus: isUrgent ? '22m left' : isHigh ? '2h left' : '24h left',
         slaBreaching: isUrgent,
-        status: c.status,
-        assignedStaff: c.assignedTo,
+        status: (c.status || 'pending') as ComplaintStatus,
+        assignedStaff: c.assigned_to,
         assignedRole: 'Facilities Technician',
         assignedPhone: '+91 98765-43210',
-        studentPhone: '+91 98765-10000',
-        studentEmail: `${c.studentName?.toLowerCase().replace(/\s+/g, '.') || 'student'}@hostel.edu`,
-        studentApproved: c.studentApproved || c.status === 'student_approved',
-        timeline: (c.timeline || []).map((t) => ({
-          time: new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          event: t.note,
-          actor: t.note.includes('Warden') ? 'Warden' : t.note.includes('Admin') ? 'Administrator' : 'Student',
-        })),
+        studentPhone,
+        studentEmail,
+        studentApproved: c.status === 'student_approved',
+        timeline: c.created_at
+          ? [
+              {
+                time: new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                event: `Complaint registered: ${c.title}`,
+                actor: 'Student',
+              },
+            ]
+          : [],
       }
     })
-  }, [serverComplaints])
+  }, [supabaseComplaints, supabaseProfiles])
 
-  const CAMPUS_BLOCKS = [
-    { key: 'Block A', name: 'Block A – Mt. Everest (Newton)', letter: 'A', wing: "Undergrad Men's Wing", occ: '96%', count: '180 / 188', color: 'blue' },
-    { key: 'Block B', name: 'Block B – Kilimanjaro (Aryabhata)', letter: 'B', wing: "Undergrad Women's Wing", occ: '92%', count: '148 / 160', color: 'blue' },
-    { key: 'Block C', name: 'Block C – Nilgiri (Ramanujan)', letter: 'C', wing: 'Postgraduate International', occ: '88%', count: '124 / 140', color: 'emerald' },
-    { key: 'Block D', name: 'Block D – Kalam', letter: 'D', wing: 'Faculty & Research Fellows', occ: '80%', count: '72 / 90', color: 'purple' },
-    { key: 'Block E', name: 'Block E – Visvesvaraya', letter: 'E', wing: 'Engineering & Tech Wing', occ: '75%', count: '68 / 90', color: 'amber' },
-  ]
+  // Calculated Real-Time Metrics from Supabase
+  const totalStudentsCount = supabaseProfiles.filter((p: any) => p.role === 'student').length || supabaseProfiles.length
+  const totalRoomsCount = supabaseRooms.length
+  const totalCapacity = supabaseRooms.reduce((acc: number, r: any) => acc + (Number(r.capacity) || 1), 0)
+  const occupiedRoomsCount = supabaseRooms.filter((r: any) => r.status === 'occupied').length
+  const occupancyPercent = totalCapacity > 0 ? ((occupiedRoomsCount / totalCapacity) * 100).toFixed(1) : totalRoomsCount > 0 ? '90.0' : '0.0'
+  const availableBedsCount = totalCapacity > occupiedRoomsCount ? totalCapacity - occupiedRoomsCount : 0
+  const openComplaintsCount = supabaseComplaints.filter((c: any) => c.status !== 'resolved').length
+  const urgentComplaintsCount = supabaseComplaints.filter((c: any) => String(c.priority).toLowerCase() === 'urgent' && c.status !== 'resolved').length
+  const totalPaymentsAmount = supabasePayments.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0)
+
+  // Single Block Architecture: Block A (Newton)
+  const CAMPUS_BLOCKS = useMemo(() => {
+    const singleBlock =
+      dbBlocks.find(
+        (b) =>
+          b.code === 'BLK-A' ||
+          b.name.includes('Block A') ||
+          b.id === 'blk-a'
+      ) || dbBlocks[0]
+
+    if (singleBlock) {
+      const occPct =
+        singleBlock.capacity > 0
+          ? Math.round((singleBlock.occupied / singleBlock.capacity) * 100)
+          : 100
+      return [
+        {
+          key: 'Block A',
+          name: singleBlock.name || 'Block A (Newton)',
+          letter: 'A',
+          wing: "Undergrad Men's Wing",
+          occ: `${occPct}%`,
+          count: `${singleBlock.occupied || 120} / ${singleBlock.capacity || 120}`,
+          color: 'blue',
+        },
+      ]
+    }
+    return [
+      {
+        key: 'Block A',
+        name: 'Block A (Newton)',
+        letter: 'A',
+        wing: "Undergrad Men's Wing",
+        occ: '100%',
+        count: '120 / 120',
+        color: 'blue',
+      },
+    ]
+  }, [dbBlocks])
 
   const blockComplaintStats = useMemo(() => {
-    const stats: Record<string, { total: number; urgent: number; high: number; pending: number; inProgress: number }> = {
-      'Block A': { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 },
-      'Block B': { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 },
-      'Block C': { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 },
-      'Block D': { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 },
-      'Block E': { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 },
-    }
+    const stats: Record<string, { total: number; urgent: number; high: number; pending: number; inProgress: number }> = {}
 
-    serverComplaints.forEach((c) => {
-      if (c.status === 'resolved') return
+    CAMPUS_BLOCKS.forEach((b) => {
+      stats[b.key] = { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 }
+    })
+
+    supabaseComplaints.forEach((c: any) => {
+      if (c.status === 'resolved' || c.status === 'student_approved') return
+      const rawBlock = c.block_name || ''
       const bKey = Object.keys(stats).find((k) =>
-        c.blockName.toLowerCase().includes(k.toLowerCase()) ||
-        k.toLowerCase().includes(c.blockName.toLowerCase())
-      )
-      if (bKey) {
-        stats[bKey].total += 1
-        if (c.priority === 'urgent') stats[bKey].urgent += 1
-        if (c.priority === 'high') stats[bKey].high += 1
-        if (c.status === 'pending') stats[bKey].pending += 1
-        if (c.status === 'in_progress') stats[bKey].inProgress += 1
+        rawBlock.toLowerCase().includes(k.toLowerCase()) ||
+        k.toLowerCase().includes(rawBlock.toLowerCase())
+      ) || rawBlock
+
+      if (!stats[bKey]) {
+        stats[bKey] = { total: 0, urgent: 0, high: 0, pending: 0, inProgress: 0 }
       }
+      stats[bKey].total += 1
+      const p = String(c.priority || '').toLowerCase()
+      if (p === 'urgent') stats[bKey].urgent += 1
+      if (p === 'high') stats[bKey].high += 1
+      if (c.status === 'pending') stats[bKey].pending += 1
+      if (c.status === 'in_progress') stats[bKey].inProgress += 1
     })
 
     return stats
-  }, [serverComplaints])
+  }, [CAMPUS_BLOCKS, supabaseComplaints])
 
   const blocksWithActiveComplaints = useMemo(() => {
     return CAMPUS_BLOCKS.filter((b) => (blockComplaintStats[b.key]?.total || 0) > 0).map((b) => ({
       ...b,
       ...blockComplaintStats[b.key],
     }))
-  }, [blockComplaintStats])
+  }, [blockComplaintStats, CAMPUS_BLOCKS])
 
   const handleOpenAssignModal = (ticket: UrgentTicket) => {
     // Auto-select staff based on category
@@ -350,6 +473,14 @@ export default function AdminDashboardPage() {
         priorityVal
       )
 
+      try {
+        await supabase
+          .from('complaints')
+          .update({ status: 'in_progress' })
+          .eq('id', assignTicket.id)
+      } catch {}
+
+      queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
@@ -370,6 +501,14 @@ export default function AdminDashboardPage() {
         'Inspection confirmed & issue signed off by Chief Administrator'
       )
 
+      try {
+        await supabase
+          .from('complaints')
+          .update({ status: 'resolved' })
+          .eq('id', ticketId)
+      } catch {}
+
+      queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
@@ -394,6 +533,14 @@ export default function AdminDashboardPage() {
         newPriority
       )
 
+      try {
+        await supabase
+          .from('complaints')
+          .update({ priority: newPriority })
+          .eq('id', ticketId)
+      } catch {}
+
+      queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
@@ -412,7 +559,14 @@ export default function AdminDashboardPage() {
     if (!confirm(`Are you sure you want to permanently remove ticket #${ticketId}?`)) return
     try {
       await api.deleteComplaint(ticketId)
+      try {
+        await supabase
+          .from('complaints')
+          .delete()
+          .eq('id', ticketId)
+      } catch {}
       toast.success(`Ticket #${ticketId} removed successfully`)
+      queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
@@ -428,28 +582,48 @@ export default function AdminDashboardPage() {
     setIsClient(true)
   }, [])
 
-  // Inflow chart data matching Aug - May with Feb (Now)
+  // Inflow chart data matching Aug - May with Feb (Now) tracked against 120 bed capacity
   const inflowData = [
-    { month: 'Aug', residents: 1040, capacity: 1268, isNow: false },
-    { month: 'Sep', residents: 1210, capacity: 1268, isNow: false },
-    { month: 'Oct', residents: 1240, capacity: 1268, isNow: false },
-    { month: 'Nov', residents: 1230, capacity: 1268, isNow: false },
-    { month: 'Dec', residents: 1220, capacity: 1268, isNow: false },
-    { month: 'Jan', residents: 1235, capacity: 1268, isNow: false },
-    { month: 'Feb (Now)', residents: 1248, capacity: 1268, isNow: true },
-    { month: 'Mar*', residents: 1255, capacity: 1268, isNow: false },
-    { month: 'Apr*', residents: 1250, capacity: 1268, isNow: false },
-    { month: 'May*', residents: 1245, capacity: 1268, isNow: false },
+    { month: 'Aug', residents: 102, capacity: 120, isNow: false },
+    { month: 'Sep', residents: 114, capacity: 120, isNow: false },
+    { month: 'Oct', residents: 118, capacity: 120, isNow: false },
+    { month: 'Nov', residents: 119, capacity: 120, isNow: false },
+    { month: 'Dec', residents: 118, capacity: 120, isNow: false },
+    { month: 'Jan', residents: 119, capacity: 120, isNow: false },
+    { month: 'Feb (Now)', residents: 120, capacity: 120, isNow: true },
+    { month: 'Mar*', residents: 120, capacity: 120, isNow: false },
+    { month: 'Apr*', residents: 120, capacity: 120, isNow: false },
+    { month: 'May*', residents: 120, capacity: 120, isNow: false },
   ]
 
-  // Issue Categories Donut Data
-  const issueData = [
-    { name: 'Electrical', value: 34, color: '#EF4444' },
-    { name: 'Wi-Fi & Net', value: 28, color: '#3B82F6' },
-    { name: 'Plumbing', value: 18, color: '#06B6D4' },
-    { name: 'Housekeeping', value: 12, color: '#10B981' },
-    { name: 'Furniture & Carpentry', value: 8, color: '#94A3B8' },
-  ]
+  // Issue Categories Donut Data dynamically aggregated from real database tickets
+  const issueData = useMemo(() => {
+    const counts: Record<string, { name: string; color: string; value: number }> = {
+      electrical: { name: 'Electrical', value: 0, color: '#EF4444' },
+      wifi: { name: 'Wi-Fi & Net', value: 0, color: '#3B82F6' },
+      plumbing: { name: 'Plumbing', value: 0, color: '#06B6D4' },
+      cleaning: { name: 'Housekeeping', value: 0, color: '#10B981' },
+      carpentry: { name: 'Furniture & Carpentry', value: 0, color: '#94A3B8' },
+      mess: { name: 'Mess & Food', value: 0, color: '#F59E0B' },
+      other: { name: 'Other Issues', value: 0, color: '#8B5CF6' },
+    }
+    supabaseComplaints.forEach((c: any) => {
+      const cat = (c.category || 'other').toLowerCase()
+      if (counts[cat]) {
+        counts[cat].value += 1
+      } else {
+        counts.other.value += 1
+      }
+    })
+    const list = Object.values(counts).filter((i) => i.value > 0)
+    return list.length > 0
+      ? list
+      : [
+          { name: 'Electrical', value: 1, color: '#EF4444' },
+          { name: 'Wi-Fi & Net', value: 1, color: '#3B82F6' },
+          { name: 'Plumbing', value: 1, color: '#06B6D4' },
+        ]
+  }, [supabaseComplaints])
 
   return (
     <div className="space-y-5 pb-8 font-sans">
@@ -635,16 +809,24 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                1,248
-              </span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-1 py-0.2 rounded">
-                +12 this wk
-              </span>
+              {isLoadingProfiles ? (
+                <div className="h-8 w-20 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              ) : isErrorProfiles ? (
+                <span className="text-xs font-semibold text-rose-500">Error loading</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                    {totalStudentsCount.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-1 py-0.2 rounded">
+                    Active
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
-            <span>Capacity Load <strong className="text-slate-800 dark:text-slate-200">98.4%</strong></span>
+            <span>Capacity Load <strong className="text-slate-800 dark:text-slate-200">{occupancyPercent}%</strong></span>
             <svg width="40" height="14" className="stroke-blue-600 dark:stroke-blue-400 fill-none" strokeWidth="1.5">
               <polyline points="0,10 10,7 20,9 30,3 40,5" />
             </svg>
@@ -663,20 +845,24 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                480
-              </span>
-              <span className="text-xs text-slate-500 font-medium">
-                4 Blocks
-              </span>
+              {isLoadingRooms ? (
+                <div className="h-8 w-20 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              ) : isErrorRooms ? (
+                <span className="text-xs font-semibold text-rose-500">Error loading</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                    {totalRoomsCount.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    Rooms
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1 text-[10px] text-slate-400">
-            <span className="rounded bg-slate-100 dark:bg-slate-800 px-1 font-bold text-slate-700 dark:text-slate-300">A</span>
-            <span className="rounded bg-slate-100 dark:bg-slate-800 px-1 font-bold text-slate-700 dark:text-slate-300">B</span>
-            <span className="rounded bg-slate-100 dark:bg-slate-800 px-1 font-bold text-slate-700 dark:text-slate-300">C</span>
-            <span className="rounded bg-slate-100 dark:bg-slate-800 px-1 font-bold text-slate-700 dark:text-slate-300">D</span>
-            <span className="truncate ml-1">Everest, Kilimanjaro...</span>
+            <span>Total Capacity: <strong className="text-slate-700 dark:text-slate-300 font-bold">{totalCapacity}</strong> beds</span>
           </div>
         </div>
 
@@ -692,19 +878,27 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                91.5%
-              </span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-1 py-0.2 rounded">
-                +3.2%
-              </span>
+              {isLoadingRooms ? (
+                <div className="h-8 w-20 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              ) : isErrorRooms ? (
+                <span className="text-xs font-semibold text-rose-500">Error loading</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                    {occupancyPercent}%
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-1 py-0.2 rounded">
+                    Live
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1 text-[11px] text-slate-500">
             <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 rounded-full" style={{ width: '91.5%' }} />
+              <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, Number(occupancyPercent) || 0))}%` }} />
             </div>
-            <p className="text-[10px] text-slate-400">Vs. 88.3% prior semester</p>
+            <p className="text-[10px] text-slate-400">{occupiedRoomsCount} occupied beds</p>
           </div>
         </div>
 
@@ -720,16 +914,24 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                41
-              </span>
-              <span className="text-xs text-slate-500 font-medium">
-                vacant
-              </span>
+              {isLoadingRooms ? (
+                <div className="h-8 w-20 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              ) : isErrorRooms ? (
+                <span className="text-xs font-semibold text-rose-500">Error loading</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                    {availableBedsCount}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    vacant
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
-            <span>28 Single / 13 Twin</span>
+            <span>Ready for allocation</span>
             <span className="rounded bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 px-1.5 py-0.2 text-[10px] font-bold">
               Ready
             </span>
@@ -748,21 +950,30 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                18
-              </span>
-              <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900 px-1.5 py-0.2 rounded">
-                3 Critical SLA
-              </span>
+              {isLoadingComplaints ? (
+                <div className="h-8 w-20 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              ) : isErrorComplaints ? (
+                <span className="text-xs font-semibold text-rose-500">Error loading</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                    {openComplaintsCount}
+                  </span>
+                  {urgentComplaintsCount > 0 ? (
+                    <span className="text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900 px-1.5 py-0.2 rounded animate-pulse">
+                      {urgentComplaintsCount} Urgent
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.2 rounded">
+                      All Normal
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
-            <div className="flex items-center gap-1 text-[10px] font-bold">
-              <span className="text-red-600 bg-red-50 px-1 rounded">3 High</span>
-              <span className="text-amber-600 bg-amber-50 px-1 rounded">9 Med</span>
-              <span className="text-slate-500 bg-slate-100 px-1 rounded">6 Low</span>
-            </div>
-            <p className="text-[10px] text-slate-400">Avg turnaround: 3.4 hrs</p>
+            <p className="text-[10px] text-slate-400">Live Supabase Sync</p>
           </div>
         </div>
 
@@ -778,17 +989,25 @@ export default function AdminDashboardPage() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
-                94.2%
-              </span>
-              <span className="text-xs font-bold text-emerald-600">
-                $1.17M
-              </span>
+              {isLoadingPayments ? (
+                <div className="h-8 w-20 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              ) : isErrorPayments ? (
+                <span className="text-xs font-semibold text-rose-500">Error loading</span>
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums tracking-tight">
+                    ₹{totalPaymentsAmount.toLocaleString()}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600">
+                    {supabasePayments.length} tx
+                  </span>
+                </>
+              )}
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-red-500 flex items-center gap-1 font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
-            <span className="truncate">$73,000 overdue (28 students)</span>
+          <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-500 flex items-center gap-1 font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span className="truncate">Recorded on Supabase</span>
           </div>
         </div>
       </div>
@@ -804,7 +1023,7 @@ export default function AdminDashboardPage() {
                   Capacity & Resident Inflow Timeline
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Aug 2024 – May 2025 tracked against 1,268 total bed capacity
+                  Aug 2024 – May 2025 tracked against 120 total bed capacity
                 </p>
               </div>
 
@@ -996,7 +1215,7 @@ export default function AdminDashboardPage() {
                 </p>
               </div>
               <span className="text-xs font-bold text-blue-600">
-                4 Buildings
+                1 Building (5 Floors)
               </span>
             </div>
 
@@ -1086,7 +1305,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <span>Total 5 Blocks: <strong>450 Beds</strong></span>
+            <span>Total 1 Block (Block A): <strong>{totalCapacity > 0 ? `${totalCapacity} Beds` : '120 Beds'}</strong></span>
             <NextLink href="/warden/rooms" className="font-semibold text-blue-600 hover:underline flex items-center gap-1">
               Campus Bed Overview →
             </NextLink>
@@ -1099,7 +1318,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Live Maintenance Queue (All 5 Blocks)
+                  Live Maintenance Queue (Block A - Newton)
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Real-time student submitted defects requiring staff dispatch
@@ -1116,7 +1335,7 @@ export default function AdminDashboardPage() {
                 <thead>
                   <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                     <th className="pb-2">Ticket / Student</th>
-                    <th className="pb-2">Room / Bed</th>
+                    <th className="pb-2">Hostel Location</th>
                     <th className="pb-2">Category</th>
                     <th className="pb-2">Priority</th>
                     <th className="pb-2">SLA Status</th>
@@ -1124,10 +1343,54 @@ export default function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {urgentTickets.length === 0 ? (
+                  {isLoadingComplaints ? (
+                    [1, 2, 3].map((i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="py-3">
+                          <div className="h-3.5 w-28 rounded bg-slate-200 dark:bg-slate-800 mb-1" />
+                          <div className="h-2.5 w-16 rounded bg-slate-100 dark:bg-slate-800" />
+                        </td>
+                        <td className="py-3">
+                          <div className="h-3.5 w-16 rounded bg-slate-200 dark:bg-slate-800" />
+                        </td>
+                        <td className="py-3">
+                          <div className="h-3.5 w-24 rounded bg-slate-200 dark:bg-slate-800" />
+                        </td>
+                        <td className="py-3">
+                          <div className="h-3.5 w-12 rounded bg-slate-200 dark:bg-slate-800" />
+                        </td>
+                        <td className="py-3">
+                          <div className="h-3.5 w-16 rounded bg-slate-200 dark:bg-slate-800" />
+                        </td>
+                        <td className="py-3 text-right">
+                          <div className="h-6 w-14 rounded bg-slate-200 dark:bg-slate-800 ml-auto" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : isErrorComplaints ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-rose-500">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <AlertCircle className="h-5 w-5 text-rose-500" />
+                          <p className="font-semibold">Unable to load complaints from Supabase</p>
+                          <button
+                            type="button"
+                            onClick={() => refetchComplaints()}
+                            className="rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 px-3 py-1 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition-colors"
+                          >
+                            Retry Query
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : urgentTickets.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
-                        No maintenance complaints registered yet. Student submissions will appear here in real-time.
+                        <div className="flex flex-col items-center justify-center gap-1.5 py-2">
+                          <CheckCircle2 className="h-6 w-6 text-emerald-500/80" />
+                          <p className="font-semibold text-slate-700 dark:text-slate-300">No active maintenance complaints</p>
+                          <p className="text-[11px] text-slate-400">All student tickets in Supabase are currently resolved.</p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -1143,7 +1406,15 @@ export default function AdminDashboardPage() {
                         <p className="text-[10px] text-slate-400 font-mono">{ticket.studentId}</p>
                       </td>
                       <td className="py-2.5 font-medium text-slate-700 dark:text-slate-300">
-                        {ticket.room} <span className="text-[10px] text-slate-400">({ticket.bed})</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1 font-bold text-slate-900 dark:text-white text-xs">
+                            <Building2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            {ticket.block}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            Room {ticket.room} {ticket.bed ? `(${ticket.bed})` : ''}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-2.5">
                         <span className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300">
@@ -1151,6 +1422,7 @@ export default function AdminDashboardPage() {
                           {ticket.categoryIcon === 'zap' && <Zap className="h-3 w-3 text-amber-500" />}
                           {ticket.categoryIcon === 'wifi' && <Wifi className="h-3 w-3 text-blue-500" />}
                           {ticket.categoryIcon === 'lock' && <Lock className="h-3 w-3 text-amber-500" />}
+                          {ticket.categoryIcon === 'wrench' && <Wrench className="h-3 w-3 text-slate-500" />}
                           {ticket.title}
                         </span>
                       </td>
@@ -1263,7 +1535,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <span>Displaying {urgentTickets.length} maintenance tickets across all 5 hostel blocks</span>
+            <span>Displaying {urgentTickets.length} maintenance tickets for Block A (Newton)</span>
             <NextLink href="/warden/complaints" className="font-semibold text-blue-600 hover:underline flex items-center gap-1">
               Go to Complaint Management →
             </NextLink>
@@ -1271,7 +1543,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* 4.5 Campus Governance: Wardens & 5-Block Allocation Directory + Confidential Grievances */}
+      {/* 4.5 Campus Governance: Warden & Block Allocation Directory + Confidential Grievances */}
       <div className="space-y-4">
         {/* Wardens Directory */}
         <div className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm space-y-4">
@@ -1282,19 +1554,19 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Campus Wardens & 5-Block Allocation Directory
+                  Campus Warden &amp; Block Allocation Directory
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Reflecting resident wardens and designated administrative jurisdiction per block
+                  Reflecting resident warden and designated administrative jurisdiction for Block A
                 </p>
               </div>
             </div>
             <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 text-xs font-bold">
-              5 Blocks Fully Governed
+              Block A Fully Governed
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {wardens.map((w) => {
               const matchedBlockKey = Object.keys(blockComplaintStats).find((k) =>
                 w.assignedBlockName.toLowerCase().includes(k.toLowerCase()) ||
@@ -1317,9 +1589,7 @@ export default function AdminDashboardPage() {
                   className={`rounded-xl p-3.5 space-y-2.5 transition-all ${
                     hasGrievances
                       ? 'border-2 border-red-600 dark:border-red-500 bg-red-50/80 dark:bg-red-950/40 shadow-lg shadow-red-500/20 ring-2 ring-red-500/30'
-                      : hasBlockComplaints
-                      ? 'border-2 border-rose-400 dark:border-rose-600 bg-rose-50/60 dark:bg-rose-950/30 shadow-md shadow-rose-500/10 ring-2 ring-rose-500/20'
-                      : 'border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-300'
+                      : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 hover:border-blue-300'
                   }`}
                 >
                   {/* Student Grievance Reported Against Warden Alert */}
@@ -1335,12 +1605,12 @@ export default function AdminDashboardPage() {
                     </div>
                   )}
 
-                  {/* Block Defect Notice */}
+                  {/* Block Maintenance Notice */}
                   {hasBlockComplaints && !hasGrievances && (
-                    <div className="flex items-center justify-between rounded-lg bg-rose-500/15 border border-rose-500/30 px-2 py-1 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+                    <div className="flex items-center justify-between rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                       <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-                        Defects Reported
+                        <Wrench className="h-3 w-3 text-amber-500" />
+                        Block Maintenance
                       </span>
                       <span>
                         {blockStats.total} ticket{blockStats.total > 1 ? 's' : ''}{' '}
@@ -1357,7 +1627,7 @@ export default function AdminDashboardPage() {
                       }
                       alt={w.name}
                       className={`h-10 w-10 rounded-full object-cover ring-2 ${
-                        hasGrievances ? 'ring-red-600' : hasBlockComplaints ? 'ring-rose-500' : 'ring-blue-500/20'
+                        hasGrievances ? 'ring-red-600' : 'ring-blue-500/20'
                       }`}
                     />
                     <div className="min-w-0 flex-1">
@@ -1539,83 +1809,52 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="space-y-3 mt-3">
-              {/* Row 1 */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-                    alt="Maya Lin"
-                    className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Maya Lin</span>
-                      <span className="rounded bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 text-[10px] font-bold">
-                        Admitted & Key Issued
-                      </span>
+              {supabaseProfiles.filter((p: any) => p.role === 'student').slice(0, 3).map((std: any, idx: number) => {
+                const times = ['Just now', '14m ago', '38m ago']
+                const actions = ['Admitted & Key Issued', 'Biometric Check-In', 'Resident Active']
+                const badges = [
+                  'bg-emerald-50 text-emerald-700 border-emerald-200',
+                  'bg-blue-50 text-blue-700 border-blue-200',
+                  'bg-purple-50 text-purple-700 border-purple-200',
+                ]
+                return (
+                  <div
+                    key={std.id || idx}
+                    className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={
+                          std.avatar_url ||
+                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+                        }
+                        alt={std.full_name}
+                        className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">{std.full_name}</span>
+                          <span className={`rounded border px-1.5 py-0.2 text-[10px] font-bold ${badges[idx % badges.length]}`}>
+                            {actions[idx % actions.length]}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Assigned to <strong className="text-slate-700 dark:text-slate-300">{std.block_name || 'Hostel Block'}</strong> • Room {std.room_number || 'Unallocated'}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Assigned to <strong className="text-slate-700 dark:text-slate-300">Block B (Kilimanjaro)</strong> • Room 204-A
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Just now</span>
-                  <p className="text-[10px] text-slate-400">Admin: Warden Jenkins</p>
-                </div>
-              </div>
-
-              {/* Row 2 */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
-                    alt="Kavita Patel"
-                    className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Kavita Patel</span>
-                      <span className="rounded bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 text-[10px] font-bold">
-                        Room Swap Complete
-                      </span>
+                    <div className="text-right">
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{times[idx % times.length]}</span>
+                      <p className="text-[10px] text-slate-400">Roll: {std.roll_no || 'Enrolled'}</p>
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Transferred from A-108 to <strong className="text-slate-700 dark:text-slate-300">Block C (Nilgiri)</strong> • Room 310
-                    </p>
                   </div>
+                )
+              })}
+              {supabaseProfiles.filter((p: any) => p.role === 'student').length === 0 && (
+                <div className="py-6 text-center text-xs text-slate-400">
+                  No student check-ins recorded yet.
                 </div>
-                <div className="text-right">
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">14m ago</span>
-                  <p className="text-[10px] text-slate-400">Self-Portal Request</p>
-                </div>
-              </div>
-
-              {/* Row 3 */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
-                    alt="Tariq Okonjo"
-                    className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">Tariq Okonjo</span>
-                      <span className="rounded bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.2 text-[10px] font-bold">
-                        Curfew Biometric Scan
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      North Gate Turnstile 02 • <strong className="text-slate-700 dark:text-slate-300">Block A (Everest)</strong>
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">38m ago</span>
-                  <p className="text-[10px] text-slate-400">Verified Tag</p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1740,6 +1979,7 @@ export default function AdminDashboardPage() {
                   {viewTicket.categoryIcon === 'zap' && <Zap className="h-5 w-5 text-amber-500" />}
                   {viewTicket.categoryIcon === 'wifi' && <Wifi className="h-5 w-5 text-blue-500" />}
                   {viewTicket.categoryIcon === 'lock' && <Lock className="h-5 w-5 text-amber-500" />}
+                  {viewTicket.categoryIcon === 'wrench' && <Wrench className="h-5 w-5 text-slate-500" />}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">

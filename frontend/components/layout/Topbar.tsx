@@ -15,6 +15,7 @@ import {
   Check,
   LogOut,
   Sparkles,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -27,11 +28,33 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
   const [isCommandOpen, setIsCommandOpen] = useState(false)
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [isPortalMenuOpen, setIsPortalMenuOpen] = useState(false)
   const pathname = usePathname()
   const { user, role, switchRole, logout } = useAuth()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const queryClient = useQueryClient()
+
+  const portals = [
+    {
+      role: 'admin' as Role,
+      label: 'Admin Portal',
+      subtitle: 'Chief Administrator (Campus Management)',
+      path: '/admin',
+    },
+    {
+      role: 'warden' as Role,
+      label: 'Warden Portal',
+      subtitle: 'Senior Resident Warden (Dorm Operations)',
+      path: '/warden',
+    },
+    {
+      role: 'student' as Role,
+      label: 'Student Portal',
+      subtitle: 'Resident Student (Room & Complaints)',
+      path: '/student',
+    },
+  ]
 
   useEffect(() => {
     setMounted(true)
@@ -79,7 +102,7 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
   return (
     <>
       <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#0B1020]/95 backdrop-blur px-4 sm:px-6">
-        {/* Left: Breadcrumbs matching screenshot */}
+        {/* Left: Breadcrumbs & Portal Switcher */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#2563EB] text-white">
@@ -96,6 +119,63 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
                   : 'Management Console'}
               </span>
             </div>
+          </div>
+
+          {/* Quick 1-Click Portal Switcher */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsPortalMenuOpen(!isPortalMenuOpen)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-slate-700 transition-all shadow-xs"
+              title="Click to jump directly between Admin, Warden, and Student portals"
+            >
+              <ArrowRightLeft className="h-3 w-3 text-blue-500" />
+              <span>Switch Portal</span>
+              <ChevronDown className="h-3 w-3 text-slate-400" />
+            </button>
+
+            {isPortalMenuOpen && (
+              <div className="absolute left-0 mt-2 w-72 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Unified Campus Portals
+                  </p>
+                  <span className="text-[9px] font-mono text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded">
+                    1-Click
+                  </span>
+                </div>
+                <div className="py-1.5 space-y-1">
+                  {portals.map((p) => {
+                    const isActive = pathname.startsWith(p.path)
+                    return (
+                      <button
+                        key={p.role}
+                        type="button"
+                        onClick={() => {
+                          setIsPortalMenuOpen(false)
+                          if (switchRole) {
+                            switchRole(p.role)
+                          } else {
+                            window.location.href = p.path
+                          }
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl p-2 text-left transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 font-medium'
+                        }`}
+                      >
+                        <div>
+                          <p className="text-xs font-bold leading-tight">{p.label}</p>
+                          <p className="text-[10px] text-slate-400 leading-tight mt-0.5">{p.subtitle}</p>
+                        </div>
+                        {isActive && <Check className="h-4 w-4 text-blue-500 shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -115,51 +195,6 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
 
         {/* Right side items */}
         <div className="flex items-center gap-3">
-          {/* Quick Portal Tabs */}
-          <div className="hidden xl:flex items-center gap-1 p-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 text-xs font-semibold">
-            <button
-              onClick={() => switchRole('admin')}
-              className={cn(
-                'px-2.5 py-1 rounded-md transition-all',
-                pathname.startsWith('/admin') || pathname === '/'
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              )}
-            >
-              Admin Console
-            </button>
-            <button
-              onClick={() => switchRole('warden')}
-              className={cn(
-                'px-2.5 py-1 rounded-md transition-all',
-                pathname.startsWith('/warden')
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              )}
-            >
-              Warden
-            </button>
-            <button
-              onClick={() => switchRole('student')}
-              className={cn(
-                'px-2.5 py-1 rounded-md transition-all',
-                pathname.startsWith('/student')
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              )}
-            >
-              Student Portal
-            </button>
-          </div>
-
-          {/* DEMO MODE: LOCAL MOCK STATE Pill */}
-          <button
-            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-            className="hidden lg:flex items-center gap-1.5 rounded-lg border border-blue-200/80 dark:border-blue-900/70 bg-blue-50/90 dark:bg-blue-950/40 px-2.5 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors"
-          >
-            <FlaskConical className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-            <span>DEMO MODE: LOCAL MOCK STATE</span>
-          </button>
 
           {/* Notification Bell */}
           <div className="relative">
@@ -266,38 +301,27 @@ export function Topbar({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void
                   </span>
                 </div>
 
-                <div className="py-2 space-y-1">
-                  <p className="px-2 text-[10px] font-bold uppercase text-slate-400">
-                    Switch Active Persona
+
+                <div className="py-2 border-b border-slate-100 dark:border-slate-800 space-y-1">
+                  <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Switch Active Portal
                   </p>
-                  {(['admin', 'warden', 'student'] as Role[]).map((r) => (
+                  {portals.map((p) => (
                     <button
-                      key={r}
+                      key={p.role}
                       onClick={() => {
-                        switchRole(r)
                         setIsUserMenuOpen(false)
+                        if (switchRole) switchRole(p.role)
+                        else window.location.href = p.path
                       }}
-                      className={cn(
-                        'flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium capitalize',
-                        (r === 'student' && pathname.startsWith('/student')) ||
-                          (r === 'warden' && pathname.startsWith('/warden')) ||
-                          (r === 'admin' && !pathname.startsWith('/student') && !pathname.startsWith('/warden'))
+                      className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${
+                        pathname.startsWith(p.path)
                           ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                      )}
+                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
                     >
-                      <span>
-                        {r === 'admin'
-                          ? 'Chief Administrator'
-                          : r === 'warden'
-                          ? 'Resident Warden'
-                          : 'Student (Aarav Patel)'}
-                      </span>
-                      {((r === 'student' && pathname.startsWith('/student')) ||
-                        (r === 'warden' && pathname.startsWith('/warden')) ||
-                        (r === 'admin' && !pathname.startsWith('/student') && !pathname.startsWith('/warden'))) && (
-                        <Check className="h-3.5 w-3.5 text-blue-600" />
-                      )}
+                      <span>{p.label}</span>
+                      {pathname.startsWith(p.path) && <Check className="h-3 w-3 text-blue-500" />}
                     </button>
                   ))}
                 </div>

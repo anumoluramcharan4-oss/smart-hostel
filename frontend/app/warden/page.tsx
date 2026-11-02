@@ -1,8 +1,8 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import NextLink from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldAlert,
   AlertTriangle,
@@ -19,12 +19,34 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { api } from '@/lib/api'
+import { createClient } from '@/lib/supabase/client'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { formatDate } from '@/lib/utils'
 
 export default function WardenDashboardPage() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+
+  // Real-time Supabase subscription for complaints
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('warden-dash-complaints-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'complaints' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
+          queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [queryClient])
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -34,6 +56,7 @@ export default function WardenDashboardPage() {
   const { data: complaints = [], isLoading: isLoadingComplaints } = useQuery({
     queryKey: ['warden-complaints'],
     queryFn: () => api.getComplaints(),
+    refetchInterval: 1500,
   })
 
   const { data: blocks = [] } = useQuery({
@@ -43,8 +66,30 @@ export default function WardenDashboardPage() {
 
   // Urgent triage items for the hero "Needs Attention" panel
   const urgentTickets = complaints.filter(
-    (c) => c.priority === 'urgent' && c.status !== 'resolved'
+    (c) =>
+      (String(c.priority).toLowerCase() === 'urgent' ||
+        String(c.priority).toLowerCase() === 'critical') &&
+      c.status !== 'resolved' &&
+      c.status !== 'student_approved'
   )
+
+  const pendingComplaintsCount = complaints.filter(
+    (c) => c.status !== 'resolved' && c.status !== 'student_approved'
+  ).length
+
+  // Warden's Single Assigned Block (Prof. Rajesh K. Sharma - Block A Newton)
+  const myBlock = blocks.find(
+    (b) => b.code === 'BLK-A' || b.name.includes('Block A') || b.id === 'blk-a'
+  ) || {
+    id: 'blk-a',
+    name: 'Block A (Newton)',
+    code: 'BLK-A',
+    floorsCount: 5,
+    roomsCount: 30,
+    capacity: 120,
+    occupied: 120,
+    wardenName: 'Prof. Rajesh K. Sharma',
+  }
 
   return (
     <div className="space-y-6">
@@ -58,8 +103,8 @@ export default function WardenDashboardPage() {
               <span className="inline-flex items-center gap-1.5 rounded-full bg-saffron-500/15 border border-saffron-500/30 px-3 py-1 text-xs font-bold text-saffron-500">
                 <Flame className="h-3.5 w-3.5" /> Warden Triage Center
               </span>
-              <span className="text-xs text-muted-foreground">
-                Duty Roster: Block A & B Senior In-charge
+              <span className="text-xs font-bold text-slate-100 bg-white/10 px-2.5 py-0.5 rounded-full border border-white/20">
+                Duty Roster: Block A (Newton) Assigned In-charge
               </span>
             </div>
 
@@ -67,7 +112,7 @@ export default function WardenDashboardPage() {
               Needs Attention ({urgentTickets.length} Critical Items)
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl leading-relaxed">
-              3 urgent facility tickets awaiting technician dispatch, 4 night-out requests pending signature, and morning mess feedback flagged for review.
+              {urgentTickets.length} urgent facility tickets awaiting technician dispatch, 4 night-out requests pending signature, and morning mess feedback flagged for review.
             </p>
           </div>
 
@@ -134,38 +179,38 @@ export default function WardenDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Residents"
-          value="312"
-          numericValue={312}
-          trend={{ value: 4.2, label: 'new enrollments' }}
+          value={stats?.totalStudents || 120}
+          numericValue={stats?.totalStudents || 120}
+          description="Block A (Newton) • 120 Residents"
           icon={Users}
           iconColor="text-primary"
           iconBg="from-primary/20 to-indigo-500/10"
         />
         <StatCard
           title="Campus Occupancy"
-          value="90.8%"
-          numericValue={91}
+          value={`${stats?.occupancyRate || 100}%`}
+          numericValue={stats?.occupancyRate || 100}
           suffix="%"
-          trend={{ value: 1.5, label: 'capacity utilized' }}
+          description="120 of 120 beds occupied (100%)"
           icon={BedDouble}
           iconColor="text-indigo-500"
           iconBg="from-indigo-500/20 to-violet-500/10"
         />
         <StatCard
           title="Pending Tickets"
-          value="14"
-          numericValue={14}
-          trend={{ value: -3, label: 'cleared today', isPositiveGood: false }}
+          value={pendingComplaintsCount || 14}
+          numericValue={pendingComplaintsCount || 14}
+          description={`${urgentTickets.length} critical awaiting triage`}
           icon={Wrench}
           iconColor="text-saffron-500"
           iconBg="from-saffron-500/20 to-amber-500/10"
         />
         <StatCard
           title="Attendance Roll"
-          value="97.8%"
-          numericValue={98}
+          value={`${stats?.todayAttendancePercent || 97.8}%`}
+          numericValue={stats?.todayAttendancePercent || 97.8}
           suffix="%"
-          trend={{ value: 0.8, label: 'attendance rate' }}
+          description="4 absent, 3 approved night-outs"
           icon={CheckCircle2}
           iconColor="text-emerald-500"
           iconBg="from-emerald-500/20 to-teal-500/10"
@@ -174,15 +219,15 @@ export default function WardenDashboardPage() {
 
       {/* Bento Grid: Live Block Occupancy + Recent Complaints Triage */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Block Capacities (Col 5) */}
+        {/* Block Capacity & Supervision - Single Assigned Block (Block A) */}
         <div className="lg:col-span-5 rounded-3xl glass-card p-6 space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-border/50">
             <div>
               <h3 className="text-base font-bold text-foreground">
-                Block Capacity & Supervision
+                Assigned Block Supervision
               </h3>
               <p className="text-xs text-muted-foreground">
-                Live resident counts across 4 hostel blocks
+                Direct administrative jurisdiction • {myBlock.name}
               </p>
             </div>
             <NextLink
@@ -193,45 +238,66 @@ export default function WardenDashboardPage() {
             </NextLink>
           </div>
 
-          <div className="space-y-3">
-            {blocks.map((blk) => {
-              const percent = Math.round((blk.occupied / blk.capacity) * 100)
+          <div className="rounded-2xl bg-muted/40 p-5 border border-border/60 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-primary/20 text-primary font-black text-xs">
+                    A
+                  </span>
+                  {myBlock.name}
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Warden In-charge: {myBlock.wardenName}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="font-mono text-sm font-extrabold text-foreground">
+                  {myBlock.occupied} / {myBlock.capacity}
+                </span>
+                <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">
+                  {myBlock.capacity - myBlock.occupied} Beds Available
+                </p>
+              </div>
+            </div>
 
-              return (
+            {/* Progress bar */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                <span>Occupancy Load</span>
+                <span className="text-foreground font-bold">
+                  {Math.round((myBlock.occupied / myBlock.capacity) * 100)}%
+                </span>
+              </div>
+              <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
                 <div
-                  key={blk.id}
-                  className="rounded-2xl bg-muted/40 p-4 border border-border/60 space-y-2 hover:border-primary/40 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground">
-                        {blk.name}
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        Warden: {blk.wardenName}
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs font-bold text-foreground">
-                      {blk.occupied} / {blk.capacity} ({percent}%)
-                    </span>
-                  </div>
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{
+                    width: `${Math.round((myBlock.occupied / myBlock.capacity) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
 
-                  {/* Progress bar */}
-                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        percent >= 90
-                          ? 'bg-rose-500'
-                          : percent >= 80
-                          ? 'bg-saffron-500'
-                          : 'bg-teal-500'
-                      }`}
-                      style={{ width: `${percent}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
+            {/* Block Specifications */}
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/50 text-xs">
+              <div className="p-2.5 rounded-xl bg-card border border-border/40">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold">
+                  Total Rooms
+                </span>
+                <p className="text-sm font-extrabold text-foreground mt-0.5">
+                  {myBlock.roomsCount} Rooms (5 Floors)
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-card border border-border/40">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold">
+                  Wing Profile
+                </span>
+                <p className="text-sm font-extrabold text-foreground mt-0.5">
+                  Undergrad Men&apos;s
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

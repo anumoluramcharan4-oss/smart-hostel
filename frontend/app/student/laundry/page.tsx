@@ -18,8 +18,10 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
+import { useAuth } from '@/lib/auth-context'
 
 export default function StudentLaundryPage() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [pickupDate, setPickupDate] = useState(() => {
     const d = new Date()
@@ -56,8 +58,8 @@ export default function StudentLaundryPage() {
   })
 
   const { data: myOrders = [], isLoading } = useQuery({
-    queryKey: ['student-laundry-orders'],
-    queryFn: () => api.getLaundryOrders('student', 'STU101'),
+    queryKey: ['student-laundry-orders', user?.id],
+    queryFn: () => api.getLaundryOrders('student', user?.id || 'usr-student-1'),
     refetchInterval: 5000,
   })
 
@@ -118,10 +120,10 @@ export default function StudentLaundryPage() {
       .map(([item_category, quantity]) => ({ item_category, quantity }))
 
     bookMutation.mutate({
-      student_id: 'STU101',
-      student_name: 'Alex Johnson',
-      room_number: '204',
-      block_name: 'Block A',
+      student_id: user?.id || 'usr-student-1',
+      student_name: user?.name || 'Aarav Patel',
+      room_number: user?.roomNumber || 'A-204',
+      block_name: user?.blockName || 'Block A (Newton)',
       service_type: 'WASH_AND_IRON',
       pickup_date: pickupDate,
       pickup_time_slot: timeSlot,

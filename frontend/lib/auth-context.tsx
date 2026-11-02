@@ -1,96 +1,303 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
+import { createClient } from './supabase/client'
 import { Role, User } from './types'
-import { DEMO_USERS } from './mock-data'
 
 interface AuthContextType {
   user: User | null
   role: Role
   isAuthenticated: boolean
   isLoading: boolean
-  login: (role: Role, email?: string, password?: string) => Promise<void>
+  login: (email: string, password: string) => Promise<{ success: boolean; role: Role; error?: string }>
+  quickLogin: (targetRole: Role) => Promise<void>
   switchRole: (role: Role, redirect?: boolean) => void
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const STORAGE_KEY = 'hostelos_user_role'
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
   const router = useRouter()
+  const [supabase] = useState(() => createClient())
 
-  const initialRole: Role = pathname?.startsWith('/student')
-    ? 'student'
-    : pathname?.startsWith('/warden')
-    ? 'warden'
-    : 'admin'
-
-  const [role, setRole] = useState<Role>(initialRole)
-  const [user, setUser] = useState<User | null>(DEMO_USERS[initialRole] || DEMO_USERS.admin)
+  const [role, setRole] = useState<Role>('admin')
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
+  const getDemoUserForRole = useCallback(async (targetRole: Role): Promise<User> => {
     try {
-      let activeRole: Role = 'admin'
-      if (pathname.startsWith('/student')) {
-        activeRole = 'student'
-      } else if (pathname.startsWith('/warden')) {
-        activeRole = 'warden'
-      } else if (pathname.startsWith('/admin')) {
-        activeRole = 'admin'
-      } else {
-        const savedRole = localStorage.getItem(STORAGE_KEY) as Role | null
-        if (savedRole && DEMO_USERS[savedRole]) {
-          activeRole = savedRole
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', targetRole)
+        .limit(1)
+        .maybeSingle()
+
+      if (profile) {
+        return {
+          id: profile.id,
+          name: profile.full_name || (targetRole === 'admin' ? 'Chief Administrator' : targetRole === 'warden' ? 'Prof. Rajesh K. Sharma' : 'Aarav Patel'),
+          email: profile.email || `${targetRole}@hostelos.edu`,
+          role: targetRole,
+          avatar: profile.avatar_url || (targetRole === 'admin' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' : targetRole === 'warden' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80' : 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'),
+          phone: profile.phone || '+91 98201 44521',
+          roomNumber: profile.room_number || (targetRole === 'student' ? 'A-204' : undefined),
+          blockName: profile.block_name || (targetRole === 'student' ? 'Block A' : undefined),
+          bedNumber: profile.bed_number || (targetRole === 'student' ? 'Bed 1' : undefined),
+          rollNo: profile.roll_no || (targetRole === 'student' ? '21BCS042' : undefined),
         }
       }
-      setRole(activeRole)
-      setUser(DEMO_USERS[activeRole])
-      localStorage.setItem(STORAGE_KEY, activeRole)
-    } catch {
-      // localStorage may fail in some environments
+    } catch (err) {
+      console.warn('Failed to load profile for demo role:', err)
+    }
+
+    if (targetRole === 'admin') {
+      return {
+        id: 'usr-admin-1',
+        name: 'Chief Administrator',
+        email: 'admin@hostelos.edu',
+        role: 'admin',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        phone: '+91 98100 11223',
+      }
+    } else if (targetRole === 'warden') {
+      return {
+        id: 'usr-warden-1',
+        name: 'Prof. Rajesh K. Sharma',
+        email: 'warden@hostelos.edu',
+        role: 'warden',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        phone: '+91 98111 22334',
+        designation: 'Senior Resident Warden',
+      }
+    } else {
+      return {
+        id: 'usr-student-1',
+        name: 'Aarav Patel',
+        email: 'aarav.patel@hostelos.edu',
+        role: 'student',
+        avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
+        phone: '+91 98201 44521',
+        roomNumber: 'A-204',
+        blockName: 'Block A',
+        bedNumber: 'Bed 1',
+        rollNo: '21BCS042',
+      }
+    }
+  }, [supabase])
+
+  const fetchProfileAndSetUser = useCallback(async (authUser: any) => {
+    if (!authUser) {
+      setUser(null)
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      // Read user's role and details from profiles table
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle()
+
+      if (error) {
+        console.warn('Error fetching profile from profiles table:', error.message)
+      }
+
+      const assignedRole: Role =
+        (profile?.role as Role) ||
+        (authUser.user_metadata?.role as Role) ||
+        'student'
+
+      const mappedUser: User = {
+        id: authUser.id,
+        name:
+          profile?.full_name ||
+          authUser.user_metadata?.full_name ||
+          authUser.email?.split('@')[0] ||
+          'Hostel Resident',
+        email: authUser.email || profile?.email || '',
+        role: assignedRole,
+        avatar:
+          authUser.user_metadata?.avatar_url ||
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        phone: profile?.phone || '',
+      }
+
+      setUser(mappedUser)
+      setRole(assignedRole)
+    } catch (err) {
+      console.error('Failed to load profile:', err)
     } finally {
       setIsLoading(false)
     }
-  }, [pathname])
+  }, [supabase])
 
-  const login = async (selectedRole: Role, _email?: string, _password?: string) => {
+  useEffect(() => {
+    let mounted = true
+
+    // Check active session on mount
+    supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
+      if (mounted) {
+        if (authUser) {
+          await fetchProfileAndSetUser(authUser)
+        } else {
+          let cookieRole: Role | undefined
+          if (typeof document !== 'undefined') {
+            const match = document.cookie
+              .split('; ')
+              .find((row) => row.startsWith('hostelos_demo_role='))
+            if (match) {
+              cookieRole = match.split('=')[1] as Role
+            }
+          }
+
+          if (cookieRole && ['admin', 'warden', 'student'].includes(cookieRole)) {
+            const demoUser = await getDemoUserForRole(cookieRole)
+            setUser(demoUser)
+            setRole(cookieRole)
+            setIsLoading(false)
+          } else {
+            setUser(null)
+            setIsLoading(false)
+          }
+        }
+      }
+    })
+
+    // Subscribe to auth state updates
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (mounted) {
+        if (session?.user) {
+          await fetchProfileAndSetUser(session.user)
+        } else {
+          let cookieRole: Role | undefined
+          if (typeof document !== 'undefined') {
+            const match = document.cookie
+              .split('; ')
+              .find((row) => row.startsWith('hostelos_demo_role='))
+            if (match) {
+              cookieRole = match.split('=')[1] as Role
+            }
+          }
+          if (cookieRole && ['admin', 'warden', 'student'].includes(cookieRole)) {
+            const demoUser = await getDemoUserForRole(cookieRole)
+            setUser(demoUser)
+            setRole(cookieRole)
+            setIsLoading(false)
+          } else {
+            setUser(null)
+            setIsLoading(false)
+          }
+        }
+      }
+    })
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [supabase, fetchProfileAndSetUser, getDemoUserForRole])
+
+  const login = async (email: string, password: string) => {
     setIsLoading(true)
-    const newUser = DEMO_USERS[selectedRole]
-    setRole(selectedRole)
-    setUser(newUser)
     try {
-      localStorage.setItem(STORAGE_KEY, selectedRole)
-    } catch {}
-    setIsLoading(false)
-    window.location.href = `/${selectedRole}`
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        setIsLoading(false)
+        return { success: false, role: 'student' as Role, error: error.message }
+      }
+
+      if (!data.user) {
+        setIsLoading(false)
+        return { success: false, role: 'student' as Role, error: 'User not returned' }
+      }
+
+      // Fetch profile from profiles table
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .maybeSingle()
+
+      const userRole: Role =
+        (profile?.role as Role) ||
+        (data.user.user_metadata?.role as Role) ||
+        'student'
+
+      const mappedUser: User = {
+        id: data.user.id,
+        name:
+          profile?.full_name ||
+          data.user.user_metadata?.full_name ||
+          data.user.email?.split('@')[0] ||
+          'User',
+        email: data.user.email || profile?.email || '',
+        role: userRole,
+        avatar:
+          data.user.user_metadata?.avatar_url ||
+          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        phone: profile?.phone || '',
+      }
+
+      setUser(mappedUser)
+      setRole(userRole)
+      setIsLoading(false)
+
+      return { success: true, role: userRole }
+    } catch (err: any) {
+      setIsLoading(false)
+      return { success: false, role: 'student' as Role, error: err.message || 'Login failed' }
+    }
   }
 
-  const switchRole = useCallback(
-    (newRole: Role, redirect: boolean = true) => {
-      const newUser = DEMO_USERS[newRole]
-      setRole(newRole)
-      setUser(newUser)
-      try {
-        localStorage.setItem(STORAGE_KEY, newRole)
-      } catch {}
-      if (redirect) {
-        window.location.href = `/${newRole}`
-      }
-    },
-    []
-  )
+  const quickLogin = useCallback(async (targetRole: Role) => {
+    setIsLoading(true)
+    if (typeof document !== 'undefined') {
+      document.cookie = `hostelos_demo_role=${targetRole}; path=/; max-age=604800; SameSite=Lax`
+    }
+    const demoUser = await getDemoUserForRole(targetRole)
+    setUser(demoUser)
+    setRole(targetRole)
+    setIsLoading(false)
+    router.push(`/${targetRole}`)
+  }, [getDemoUserForRole, router])
 
-  const logout = () => {
-    setUser(null)
+  const switchRole = useCallback(async (newRole: Role) => {
+    setIsLoading(true)
+    if (typeof document !== 'undefined') {
+      document.cookie = `hostelos_demo_role=${newRole}; path=/; max-age=604800; SameSite=Lax`
+    }
+    const demoUser = await getDemoUserForRole(newRole)
+    setUser(demoUser)
+    setRole(newRole)
+    setIsLoading(false)
+    router.push(`/${newRole}`)
+  }, [getDemoUserForRole, router])
+
+  const logout = async () => {
+    setIsLoading(true)
+    if (typeof document !== 'undefined') {
+      document.cookie = 'hostelos_demo_role=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+    }
     try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch {}
-    window.location.href = '/login'
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Error during signOut:', err)
+    } finally {
+      setUser(null)
+      setIsLoading(false)
+      router.push('/login')
+    }
   }
 
   return (
@@ -101,6 +308,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         isLoading,
         login,
+        quickLogin,
         switchRole,
         logout,
       }}
@@ -118,15 +326,10 @@ export function useAuth() {
   return context
 }
 
-/**
- * Route protection wrapper for role-based routes.
- * In demo mode, renders children directly without blocking or state deadlock loops.
- */
 export function ProtectedRoute({
-  allowedRole,
   children,
 }: {
-  allowedRole: Role
+  allowedRole?: Role
   children: React.ReactNode
 }) {
   return <>{children}</>

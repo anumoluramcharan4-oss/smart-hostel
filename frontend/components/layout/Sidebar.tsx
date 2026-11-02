@@ -33,7 +33,7 @@ import { Role } from '@/lib/types'
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { role, switchRole, user } = useAuth()
+  const { role, user } = useAuth()
   const queryClient = useQueryClient()
 
   // Real-time storage sync for live complaint badge and laundry tariff sync
@@ -110,15 +110,22 @@ export function Sidebar() {
     .reduce((acc, curr) => acc + curr.amount, 0)
   const feesBadge = pendingFeesTotal > 0 ? `₹${(pendingFeesTotal / 1000).toFixed(1)}k Due` : undefined
 
-  const isStudent = pathname.startsWith('/student')
-  const isWarden = pathname.startsWith('/warden')
-  const isAdmin = !isStudent && !isWarden
+  // Real-time live stats for dynamic sidebar badges
+  const { data: liveStats } = useQuery({
+    queryKey: ['sidebar-live-stats'],
+    queryFn: () => api.getDashboardStats(),
+    refetchInterval: 3000,
+  })
 
-  const currentScopeValue = isStudent
-    ? 'Student Resident Portal'
-    : isWarden
-    ? 'Resident Warden (Block A & B)'
-    : 'Administrator (All Dorms)'
+  const liveStudentBadge = liveStats?.totalStudents ? String(liveStats.totalStudents) : undefined
+  const liveRoomsBadge = liveStats?.occupancyRate ? `${liveStats.occupancyRate}%` : undefined
+  const liveFeesBadge = liveStats?.totalFeesPending
+    ? `₹${Math.round(liveStats.totalFeesPending / 1000)}k Due`
+    : undefined
+
+  const isStudent = role === 'student' || pathname.startsWith('/student')
+  const isWarden = role === 'warden' || pathname.startsWith('/warden')
+  const isAdmin = role === 'admin' || (!isStudent && !isWarden)
 
   // Navigation definition based on active portal
   const adminNavItems = [
@@ -132,14 +139,12 @@ export function Sidebar() {
       label: 'Students',
       href: '/admin/students',
       icon: Users,
-      badge: '1.2k',
-      badgeColor: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
     },
     {
       label: 'Rooms & Allocation',
       href: '/admin/rooms',
       icon: BedDouble,
-      badge: '94%',
+      badge: liveRoomsBadge,
       badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
     },
     {
@@ -195,7 +200,7 @@ export function Sidebar() {
       label: 'Fee Management',
       href: '/admin/fees',
       icon: CreditCard,
-      badge: '3 Pending',
+      badge: liveFeesBadge,
       badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900',
     },
     {
@@ -220,14 +225,12 @@ export function Sidebar() {
       label: 'Student Residents',
       href: '/warden/students',
       icon: Users,
-      badge: '1.2k',
-      badgeColor: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
     },
     {
       label: 'Rooms & Allocation',
       href: '/warden/rooms',
       icon: BedDouble,
-      badge: '94%',
+      badge: liveRoomsBadge,
       badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
     },
     {
@@ -339,7 +342,7 @@ export function Sidebar() {
   const navItems = isStudent ? studentNavItems : isWarden ? wardenNavItems : adminNavItems
 
   return (
-    <aside className="w-[240px] shrink-0 hidden md:flex flex-col justify-between border-r border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0B1020] min-h-screen select-none z-30">
+    <aside className="w-[240px] shrink-0 hidden md:flex flex-col justify-between border-r border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0B1020] h-screen overflow-y-auto select-none z-30">
       <div>
         {/* Brand Header */}
         <NextLink href="/" className="p-4 flex items-center gap-2.5 hover:opacity-95 transition-opacity">
@@ -358,9 +361,9 @@ export function Sidebar() {
           </div>
         </NextLink>
 
-        {/* Role Scope Selector */}
-        <div className="px-4 py-2">
-          <div className="flex items-center justify-between text-[11px] mb-1.5">
+        {/* Active Role Portal Badge */}
+        <div className="px-4 py-2.5">
+          <div className="flex items-center justify-between text-[11px] mb-1">
             <span className="font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[10px]">
               ROLE SCOPE
             </span>
@@ -368,63 +371,15 @@ export function Sidebar() {
               Active
             </span>
           </div>
-          <div className="relative">
-            <select
-              value={currentScopeValue}
-              onChange={(e) => {
-                if (e.target.value.includes('Student')) switchRole('student')
-                else if (e.target.value.includes('Warden')) switchRole('warden')
-                else switchRole('admin')
-              }}
-              className="w-full appearance-none rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200 pr-7 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-            >
-              <option value="Administrator (All Dorms)">Administrator (All Dorms)</option>
-              <option value="Resident Warden (Block A & B)">Resident Warden (Block A & B)</option>
-              <option value="Student Resident Portal">Student Resident Portal</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* 1-Click Role Switcher Pills */}
-        <div className="px-4 pt-1 pb-2">
-          <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-900 text-[10px] font-bold">
-            <button
-              type="button"
-              onClick={() => switchRole('admin')}
-              className={cn(
-                'py-1 rounded text-center transition-all',
-                isAdmin
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              )}
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => switchRole('warden')}
-              className={cn(
-                'py-1 rounded text-center transition-all',
-                isWarden
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              )}
-            >
-              Warden
-            </button>
-            <button
-              type="button"
-              onClick={() => switchRole('student')}
-              className={cn(
-                'py-1 rounded text-center transition-all',
-                isStudent
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              )}
-            >
-              Student
-            </button>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="truncate">
+              {isStudent
+                ? 'Student Resident Portal'
+                : isWarden
+                ? 'Resident Warden (Operations)'
+                : 'Administrator (All Dorms)'}
+            </span>
           </div>
         </div>
 

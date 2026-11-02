@@ -22,7 +22,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     : 'admin'
 
   return (
-    <div className="flex min-h-screen w-full bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary">
+    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary">
       {/* Desktop Sidebar */}
       <Sidebar />
 
@@ -221,10 +221,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-w-0 pb-20 md:pb-8">
+      <div className="flex flex-1 flex-col min-w-0 h-screen overflow-hidden pb-20 md:pb-0">
         <Topbar onToggleMobileMenu={() => setMobileDrawerOpen(true)} />
 
-        <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in">
+        <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 overflow-y-auto animate-fade-in">
           {children}
         </main>
       </div>

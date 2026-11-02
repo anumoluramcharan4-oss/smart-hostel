@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import NextLink from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
@@ -64,23 +64,30 @@ export default function StudentDashboardPage() {
     queryFn: () => api.getFees({ studentId: user?.id }),
   })
 
-  // Roommates in room A-204
-  const roommates = [
-    {
-      name: 'Kabir Sen',
-      rollNo: '21BCS043',
-      bed: 'Bed 2 (Door)',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-      status: 'In Room',
+  const { data: currentRoom } = useQuery({
+    queryKey: ['student-room', user?.roomNumber],
+    queryFn: async () => {
+      if (!user?.roomNumber) return null
+      return api.getRoomById(user.roomNumber)
     },
-    {
-      name: 'Dev Dixit',
-      rollNo: '21BCS044',
-      bed: 'Bed 3 (Balcony)',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-      status: 'At Library',
-    },
-  ]
+    enabled: !!user?.roomNumber,
+  })
+
+  // Roommates dynamically derived from room occupants in database
+  const roommates = useMemo(() => {
+    if (currentRoom?.occupants && currentRoom.occupants.length > 0) {
+      return currentRoom.occupants
+        .filter((o) => o.id !== user?.id && o.name !== user?.name)
+        .map((o) => ({
+          name: o.name,
+          rollNo: o.rollNo,
+          bed: o.bed,
+          avatar: o.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+          status: 'Occupant',
+        }))
+    }
+    return []
+  }, [currentRoom, user])
 
   const pendingComplaintsCount = complaints.filter((c) => c.status !== 'resolved').length
   const pendingFeeAmount = fees

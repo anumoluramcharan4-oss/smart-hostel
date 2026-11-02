@@ -13,11 +13,13 @@ import {
   MapPin,
 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
 
 export default function StudentParcelsPage() {
+  const { user } = useAuth()
   const { data: myParcels = [], isLoading } = useQuery({
-    queryKey: ['student-my-parcels'],
-    queryFn: () => api.getStudentParcels('STU101'),
+    queryKey: ['student-my-parcels', user?.id],
+    queryFn: () => api.getStudentParcels(user?.id || 'usr-student-1'),
     refetchInterval: 4000,
   })
 

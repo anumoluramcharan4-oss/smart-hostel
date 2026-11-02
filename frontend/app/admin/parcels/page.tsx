@@ -31,10 +31,10 @@ export default function ParcelManagementPage() {
 
   // Registration Form
   const [formData, setFormData] = useState({
-    recipient_student_id: 'STU101',
-    recipient_name: 'Alex Johnson',
-    recipient_room: '204',
-    recipient_block: 'Block A',
+    recipient_student_id: 'std-1',
+    recipient_name: 'Aarav Patel',
+    recipient_room: 'A-204',
+    recipient_block: 'Block A (Newton)',
     courier: 'Amazon Prime',
     tracking_number: '',
     storage_location: 'Locker 12',

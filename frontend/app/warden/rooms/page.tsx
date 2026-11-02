@@ -38,63 +38,27 @@ export default function WardenRoomsPage() {
     queryFn: () => api.getBlocks(),
   })
 
-  const { data: allStudents = [] } = useQuery({
-    queryKey: ['students-for-allotment'],
-    queryFn: () => api.getStudents(),
+  const { data: unallocatedStudents = [] } = useQuery({
+    queryKey: ['unallocated-students'],
+    queryFn: () => api.getUnallocatedStudents(),
   })
 
   // Optimistic Allocate Room Mutation
   const allocateMutation = useMutation({
     mutationFn: ({ roomId, studentId, bed }: { roomId: string; studentId: string; bed: string }) =>
       api.allocateRoom(roomId, studentId, bed),
-    onMutate: async ({ roomId, studentId, bed }) => {
-      await queryClient.cancelQueries({ queryKey: ['rooms', selectedBlockId, selectedFloor] })
-      const prevRooms = queryClient.getQueryData<Room[]>(['rooms', selectedBlockId, selectedFloor])
-      const targetStudent = allStudents.find((s) => s.id === studentId)
-
-      if (targetStudent && prevRooms) {
-        queryClient.setQueryData<Room[]>(['rooms', selectedBlockId, selectedFloor], (old = []) =>
-          old.map((r) => {
-            if (r.id === roomId || r.number === roomId) {
-              const updatedOccupants = [
-                ...r.occupants.filter((o) => o.id !== studentId),
-                {
-                  id: targetStudent.id,
-                  name: targetStudent.name,
-                  rollNo: targetStudent.rollNo,
-                  bed,
-                  course: targetStudent.course,
-                  avatar: targetStudent.avatar,
-                },
-              ]
-              const newOccupied = updatedOccupants.length
-              return {
-                ...r,
-                occupied: newOccupied,
-                status: (newOccupied >= r.capacity ? 'occupied' : 'available') as 'occupied' | 'available',
-                occupants: updatedOccupants,
-              }
-            }
-            return r
-          })
-        )
-      }
-      return { prevRooms }
-    },
-    onError: (err, vars, ctx) => {
-      if (ctx?.prevRooms) {
-        queryClient.setQueryData(['rooms', selectedBlockId, selectedFloor], ctx.prevRooms)
-      }
-      toast.error('Failed to allocate student to room')
-    },
     onSuccess: (updatedRoom) => {
       toast.success(`Student assigned to Room ${updatedRoom.number} successfully!`)
       setActiveRoom(updatedRoom)
       setAllocatingStudentId('')
-    },
-    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['unallocated-students'] })
       queryClient.invalidateQueries({ queryKey: ['warden-students'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to allocate student to room')
     },
   })
 
@@ -106,6 +70,13 @@ export default function WardenRoomsPage() {
       toast.success('Resident deallocated from room.')
       setActiveRoom(updatedRoom)
       queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['unallocated-students'] })
+      queryClient.invalidateQueries({ queryKey: ['warden-students'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to deallocate resident')
     },
   })
 
@@ -122,6 +93,10 @@ export default function WardenRoomsPage() {
     return 'border-border/80 bg-card hover:border-primary/50 text-muted-foreground'
   }
 
+  const allBeds = ['Bed 1', 'Bed 2', 'Bed 3', 'Bed 4']
+  const occupiedBeds = (activeRoom?.occupants || []).map((o) => o.bed)
+  const vacantBeds = allBeds.filter((b) => !occupiedBeds.includes(b))
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -131,59 +106,38 @@ export default function WardenRoomsPage() {
 
       {/* Block & Floor Controls */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-3xl glass-card border border-border/80">
-        {/* Block Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {blocks.map((blk) => (
-            <button
-              key={blk.id}
-              onClick={() => setSelectedBlockId(blk.id)}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all whitespace-nowrap ${
-                selectedBlockId === blk.id
-                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
-            >
-              {blk.name}
-            </button>
-          ))}
+        {/* Floor Dropdown Control (1 Building: Block A - Newton, 5 Floors) */}
+        <div className="flex items-center gap-3">
+          <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Layers className="h-4 w-4 text-primary" />
+            Floor Level:
+          </label>
+          <select
+            value={selectedFloor}
+            onChange={(e) => setSelectedFloor(Number(e.target.value))}
+            className="rounded-xl border border-input bg-card px-4 py-2 text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer shadow-sm"
+          >
+            {[1, 2, 3, 4, 5].map((fl) => (
+              <option key={fl} value={fl}>
+                Floor {fl} ({fl === 1 ? 'Ground Level' : `Level ${fl}`}) • 6 Rooms (24 Beds)
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Floor selector & Legend */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 rounded-xl bg-muted/60 p-1 border border-border/60">
-            {[1, 2, 3].map((fl) => (
-              <button
-                key={fl}
-                onClick={() => setSelectedFloor(fl)}
-                className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
-                  selectedFloor === fl
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Floor {fl}
-              </button>
-            ))}
+        {/* Quick Legend */}
+        <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-border" />
+            <span className="text-muted-foreground">Empty</span>
           </div>
-
-          {/* Quick Legend */}
-          <div className="hidden lg:flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-border" />
-              <span className="text-muted-foreground">Empty</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-saffron-500" />
-              <span className="text-muted-foreground">Partial</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
-              <span className="text-muted-foreground">Full</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-              <span className="text-muted-foreground">Service</span>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-saffron-500" />
+            <span className="text-muted-foreground">Partial</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+            <span className="text-muted-foreground">Full (4/4)</span>
           </div>
         </div>
       </div>
@@ -360,7 +314,7 @@ export default function WardenRoomsPage() {
 
                   <div>
                     <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
-                      Select Unassigned / Transfer Student
+                      Select Unallocated Student
                     </label>
                     <select
                       value={allocatingStudentId}
@@ -368,31 +322,36 @@ export default function WardenRoomsPage() {
                       className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                     >
                       <option value="">Choose a student...</option>
-                      {allStudents
-                        .filter(
-                          (st) =>
-                            !activeRoom.occupants.some((o) => o.id === st.id)
-                        )
-                        .map((st) => (
+                      {unallocatedStudents.length === 0 ? (
+                        <option value="" disabled>No unallocated students available</option>
+                      ) : (
+                        unallocatedStudents.map((st) => (
                           <option key={st.id} value={st.id}>
-                            {st.name} ({st.rollNo}) - Current: {st.roomNumber}
+                            {st.name} ({st.rollNo})
                           </option>
-                        ))}
+                        ))
+                      )}
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
-                      Bed Position
+                      Target Bed
                     </label>
                     <select
                       value={allocatingBed}
                       onChange={(e) => setAllocatingBed(e.target.value)}
                       className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                     >
-                      <option value="Bed 1 (Window)">Bed 1 (Window)</option>
-                      <option value="Bed 2 (Door)">Bed 2 (Door)</option>
-                      <option value="Bed 3 (Balcony)">Bed 3 (Balcony)</option>
+                      {vacantBeds.length === 0 ? (
+                        <option value="" disabled>No vacant beds in this room</option>
+                      ) : (
+                        vacantBeds.map((bedName) => (
+                          <option key={bedName} value={bedName}>
+                            {bedName}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
 

@@ -25,27 +25,11 @@ import {
   Send,
 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Complaint, ComplaintPriority, ComplaintStatus } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
-
-const availableStaff = [
-  { id: 'staff-1', name: 'Rajesh Verma (Plumber)', phone: '+91 98765-43210' },
-  { id: 'staff-2', name: 'Manoj Sharma (Electrician)', phone: '+91 98765-43211' },
-  { id: 'staff-3', name: 'Suresh Patil (Network Engineer)', phone: '+91 98765-43212' },
-  { id: 'staff-4', name: 'Vikram Seth (Locksmith & Security)', phone: '+91 98765-43213' },
-  { id: 'staff-5', name: 'Anita Devi (Housekeeping)', phone: '+91 98765-43214' },
-]
-
-const HOSTEL_BLOCKS = [
-  'All Blocks',
-  'Block A (Newton)',
-  'Block B (Aryabhata)',
-  'Block C (Ramanujan)',
-  'Block D (Kalam)',
-  'Block E (Visvesvaraya)',
-]
 
 export default function AdminComplaintsPage() {
   const queryClient = useQueryClient()
@@ -55,9 +39,24 @@ export default function AdminComplaintsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [assigningTicket, setAssigningTicket] = useState<Complaint | null>(null)
-  const [selectedStaff, setSelectedStaff] = useState('Rajesh Verma (Plumber)')
+  const [selectedStaff, setSelectedStaff] = useState('')
   const [selectedPriority, setSelectedPriority] = useState<ComplaintPriority>('urgent')
   const [dispatchNote, setDispatchNote] = useState('')
+
+  // Dynamically load blocks & maintenance staff
+  const { data: blocksData = [] } = useQuery({
+    queryKey: ['hostel-blocks'],
+    queryFn: () => api.getBlocks(),
+  })
+
+  const { data: availableStaff = [] } = useQuery({
+    queryKey: ['hostel-staff'],
+    queryFn: () => api.getStaff(),
+  })
+
+  const hostelBlocks = useMemo(() => {
+    return ['Block A (Newton)']
+  }, [])
 
   // Cross-tab real-time storage event sync
   useEffect(() => {
@@ -70,10 +69,31 @@ export default function AdminComplaintsPage() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [queryClient])
 
+  // Real-time Supabase subscription for complaints
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('admin-complaints-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'complaints' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['admin-complaints-list'] })
+          queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
+          queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [queryClient])
+
   const { data: complaints = [], isLoading } = useQuery({
     queryKey: ['admin-complaints-list'],
     queryFn: () => api.getComplaints(),
-    refetchInterval: 2000,
+    refetchInterval: 1500,
   })
 
   // Mutations
@@ -135,8 +155,17 @@ export default function AdminComplaintsPage() {
     return complaints.filter((c) => {
       // Block filter
       if (selectedBlock !== 'All Blocks') {
-        const blkClean = selectedBlock.split(' ')[0].toLowerCase()
-        if (!c.blockName.toLowerCase().includes(blkClean)) return false
+        const blkClean = selectedBlock.toLowerCase().replace('block ', '').split(' ')[0]
+        const compBlock = (c.blockName || '').toLowerCase()
+        const roomLetter = (c.roomNumber || '').toLowerCase().charAt(0)
+        if (
+          !compBlock.includes(blkClean) &&
+          !blkClean.includes(compBlock) &&
+          !selectedBlock.toLowerCase().includes(compBlock) &&
+          roomLetter !== blkClean
+        ) {
+          return false
+        }
       }
       // Category filter
       if (categoryFilter !== 'all' && c.category !== categoryFilter) return false
@@ -148,11 +177,11 @@ export default function AdminComplaintsPage() {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
         return (
-          c.title.toLowerCase().includes(q) ||
-          c.description.toLowerCase().includes(q) ||
-          c.studentName.toLowerCase().includes(q) ||
-          c.roomNumber.toLowerCase().includes(q) ||
-          c.id.toLowerCase().includes(q)
+          (c.title || '').toLowerCase().includes(q) ||
+          (c.description || '').toLowerCase().includes(q) ||
+          (c.studentName || '').toLowerCase().includes(q) ||
+          (c.roomNumber || '').toLowerCase().includes(q) ||
+          (c.id || '').toLowerCase().includes(q)
         )
       }
       return true
@@ -197,7 +226,7 @@ export default function AdminComplaintsPage() {
             onChange={(e) => setSelectedBlock(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
           >
-            {HOSTEL_BLOCKS.map((b) => (
+            {hostelBlocks.map((b) => (
               <option key={b} value={b}>
                 {b}
               </option>
@@ -340,7 +369,14 @@ export default function AdminComplaintsPage() {
             >
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-slate-500">#{c.id}</span>
+                  <span className="font-mono text-xs font-bold text-slate-500">#{c.id.slice(0, 8)}</span>
+
+                  {/* Prominent Location Tag */}
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold shadow-xs">
+                    <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                    {c.blockName || 'Block A (Newton)'} • Room {c.roomNumber}
+                  </span>
+
                   <h3 className="font-bold text-sm text-slate-900 dark:text-white truncate">{c.title}</h3>
 
                   {/* Priority Tag */}
@@ -383,7 +419,10 @@ export default function AdminComplaintsPage() {
                     <strong className="text-slate-600 dark:text-slate-300">Student:</strong> {c.studentName}
                   </span>
                   <span>
-                    <strong className="text-slate-600 dark:text-slate-300">Location:</strong> {c.blockName} • Room {c.roomNumber}
+                    <strong className="text-slate-600 dark:text-slate-300">Hostel Block:</strong> <span className="font-bold text-blue-600 dark:text-blue-400">{c.blockName}</span>
+                  </span>
+                  <span>
+                    <strong className="text-slate-600 dark:text-slate-300">Room:</strong> <span className="font-bold text-slate-900 dark:text-white">{c.roomNumber}</span>
                   </span>
                   <span>
                     <strong className="text-slate-600 dark:text-slate-300">Logged:</strong> {formatDate(c.createdAt)}
@@ -541,7 +580,7 @@ export default function AdminComplaintsPage() {
                 onClick={() =>
                   dispatchStaffMutation.mutate({
                     id: assigningTicket.id,
-                    staffName: selectedStaff,
+                    staffName: selectedStaff || availableStaff[0]?.name || 'Technician',
                     priority: selectedPriority,
                     note: dispatchNote,
                   })
