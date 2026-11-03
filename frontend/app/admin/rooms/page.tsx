@@ -26,6 +26,14 @@ export default function AdminRoomsPage() {
   const [activeRoom, setActiveRoom] = useState<Room | null>(null)
   const [allocatingStudentId, setAllocatingStudentId] = useState('')
   const [allocatingBed, setAllocatingBed] = useState('Bed 1')
+  const [confirmDeallocate, setConfirmDeallocate] = useState<{
+    studentId: string
+    name: string
+    bed: string
+    roomNumber: string
+    reason: string
+  } | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   const { data: rooms = [], isLoading: isLoadingRooms } = useQuery({
     queryKey: ['admin-rooms', selectedFloor],
@@ -83,10 +91,16 @@ export default function AdminRoomsPage() {
     },
   })
 
+  const { data: roomHistory = [] } = useQuery({
+    queryKey: ['room-history', activeRoom?.id],
+    queryFn: () => (activeRoom ? api.getRoomHistory(activeRoom.id) : Promise.resolve([])),
+    enabled: Boolean(activeRoom && showHistory),
+  })
+
   // Deallocate Room Mutation
   const deallocateMutation = useMutation({
-    mutationFn: ({ roomId, studentId }: { roomId: string; studentId: string }) =>
-      api.deallocateRoom(roomId, studentId),
+    mutationFn: ({ roomId, studentId, reason }: { roomId: string; studentId: string; reason?: string }) =>
+      api.deallocateRoom(roomId, studentId, reason),
     onSuccess: (updatedRoom) => {
       queryClient.invalidateQueries({ queryKey: ['admin-rooms'] })
       queryClient.invalidateQueries({ queryKey: ['admin-students-for-allotment'] })
@@ -94,8 +108,10 @@ export default function AdminRoomsPage() {
       queryClient.invalidateQueries({ queryKey: ['blocks'] })
       queryClient.invalidateQueries({ queryKey: ['sidebar-live-stats'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['room-history'] })
 
       setActiveRoom(updatedRoom)
+      setConfirmDeallocate(null)
       toast.success('Student deallocated from room successfully')
     },
     onError: (err: any) => {
@@ -266,9 +282,12 @@ export default function AdminRoomsPage() {
                       </div>
                       <button
                         onClick={() =>
-                          deallocateMutation.mutate({
-                            roomId: activeRoom.id,
+                          setConfirmDeallocate({
                             studentId: occ.id,
+                            name: occ.name,
+                            bed: occ.bed,
+                            roomNumber: activeRoom.number,
+                            reason: '',
                           })
                         }
                         disabled={deallocateMutation.isPending}
@@ -282,8 +301,18 @@ export default function AdminRoomsPage() {
               )}
             </div>
 
-            {/* Allocate New Student */}
-            {activeRoom.occupied < activeRoom.capacity && (
+            {/* Room Full Banner OR Allocation Form */}
+            {activeRoom.occupied >= activeRoom.capacity ? (
+              <div className="rounded-xl border border-border/80 bg-muted/40 p-4 text-center space-y-1">
+                <p className="text-xs font-bold text-foreground flex items-center justify-center gap-1.5">
+                  <Check className="h-4 w-4 text-emerald-500" />
+                  Room is full (4/4 beds occupied)
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Deallocate a resident above or transfer them to assign a new student to this room.
+                </p>
+              </div>
+            ) : (
               <div className="space-y-3 pt-2 border-t border-border">
                 <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
                   Allocate New Student to Vacant Bed
@@ -346,6 +375,92 @@ export default function AdminRoomsPage() {
                 >
                   {allocateMutation.isPending ? 'Allocating...' : 'Confirm Bed Allocation'}
                 </button>
+              </div>
+            )}
+
+            {/* Audit History Toggle */}
+            <div className="pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowHistory((prev) => !prev)}
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+              >
+                {showHistory ? 'Hide Allocation History' : 'View Room Allocation History & Audit Log →'}
+              </button>
+
+              {showHistory && (
+                <div className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-border bg-muted/20 p-2 space-y-2">
+                  {roomHistory.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground text-center py-2">
+                      No recent allocation actions recorded for this room.
+                    </p>
+                  ) : (
+                    roomHistory.map((h) => (
+                      <div key={h.id} className="text-[11px] p-2 rounded-lg bg-card border border-border/50">
+                        <div className="flex items-center justify-between font-semibold">
+                          <span className="capitalize text-foreground font-bold">
+                            {h.action}: {h.studentName} ({h.bedNumber})
+                          </span>
+                          <span className="text-muted-foreground text-[10px]">
+                            {h.timestamp ? new Date(h.timestamp).toLocaleDateString() : ''}
+                          </span>
+                        </div>
+                        {h.reason && <p className="text-muted-foreground text-[10px] mt-0.5">Reason: {h.reason}</p>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Confirmation Dialog for Deallocation */}
+            {confirmDeallocate && (
+              <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4">
+                <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 space-y-4 shadow-2xl animate-scale-in">
+                  <h4 className="text-sm font-bold text-foreground">
+                    Confirm Resident Removal
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Remove <strong className="text-foreground">{confirmDeallocate.name}</strong> from Room <strong className="text-foreground">{confirmDeallocate.roomNumber}</strong> {confirmDeallocate.bed}?
+                  </p>
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                      Reason (Optional):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. End of term / room transfer / withdrew"
+                      value={confirmDeallocate.reason}
+                      onChange={(e) =>
+                        setConfirmDeallocate((prev) => prev ? { ...prev, reason: e.target.value } : null)
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-border bg-background text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeallocate(null)}
+                      className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deallocateMutation.isPending}
+                      onClick={() =>
+                        deallocateMutation.mutate({
+                          roomId: activeRoom.id,
+                          studentId: confirmDeallocate.studentId,
+                          reason: confirmDeallocate.reason,
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition"
+                    >
+                      {deallocateMutation.isPending ? 'Removing...' : 'Confirm Remove'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

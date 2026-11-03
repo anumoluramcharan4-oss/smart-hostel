@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from backend.app.db.session import get_db
-from backend.app.models.hostel import Room, Profile, Allocation, Block
+from backend.app.models.hostel import Room, Profile, Allocation, Block, AllocationHistory
 
 router = APIRouter(tags=["Rooms"])
 
@@ -19,6 +19,14 @@ class AllocationRequest(BaseModel):
 
 class DeallocationRequest(BaseModel):
     student_id: str
+    reason: Optional[str] = None
+
+
+class TransferRequest(BaseModel):
+    student_id: str
+    target_room_id: str
+    target_bed_number: str
+    reason: Optional[str] = None
 
 
 @router.get("/rooms")
@@ -92,33 +100,31 @@ def allocate_room(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Check if student is already in another room
+    # Check if student is already actively allocated
     existing_alloc = db.query(Allocation).filter(
         Allocation.student_id == student.id,
         Allocation.is_active == True,
     ).first()
     if existing_alloc:
-        # End existing allocation
-        existing_alloc.is_active = False
-        existing_alloc.deallocated_at = datetime.now(timezone.utc)
-        # Update old room if different
-        old_room = db.query(Room).filter(Room.id == existing_alloc.room_id).first()
-        if old_room and old_room.id != room.id:
-            old_occupants = [o for o in (old_room.occupants or []) if o.get("id") != student.id]
-            old_room.occupants = old_occupants
-            old_room.occupied = len(old_occupants)
-            old_room.status = "available" if len(old_occupants) < (old_room.capacity or 4) else "occupied"
+        raise HTTPException(
+            status_code=400,
+            detail=f"Student {student.full_name} already has an active allocation ({existing_alloc.room_number} {existing_alloc.bed_number}). Deallocate or transfer first."
+        )
 
     target_bed = payload.bed_number or payload.bed or "Bed 1"
 
-    # End any active allocation on this specific bed in this room
+    # Check if room is already at full capacity
+    if room.occupied >= (room.capacity or 4):
+        raise HTTPException(status_code=400, detail=f"Room {room.number} is full ({room.capacity}/{room.capacity} occupied)")
+
+    # Check if this specific bed in this room is already occupied
     bed_alloc = db.query(Allocation).filter(
         Allocation.room_number == room.number,
         Allocation.bed_number == target_bed,
         Allocation.is_active == True,
     ).first()
-    if bed_alloc and bed_alloc.student_id != student.id:
-        raise HTTPException(status_code=400, detail=f"{target_bed} is already occupied")
+    if bed_alloc:
+        raise HTTPException(status_code=400, detail=f"{target_bed} in Room {room.number} is already occupied")
 
     # Create new allocation record
     new_alloc = Allocation(
@@ -142,7 +148,7 @@ def allocate_room(
         "id": student.id,
         "name": student.full_name,
         "rollNo": student.roll_no or "",
-        "bed": payload.bed_number,
+        "bed": target_bed,
         "course": student.course or "",
         "avatar": student.avatar_url or "",
     })
@@ -150,6 +156,21 @@ def allocate_room(
     room.occupants = current_occupants
     room.occupied = len(current_occupants)
     room.status = "occupied" if room.occupied >= (room.capacity or 4) else "available"
+
+    # Record in Allocation History
+    hist = AllocationHistory(
+        id=f"hist-alloc-{uuid_gen()}",
+        student_id=student.id,
+        student_name=student.full_name,
+        student_roll=student.roll_no,
+        room_number=room.number,
+        bed_number=target_bed,
+        action="allocate",
+        performed_by="admin",
+        reason="Allocated by Administrator",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(hist)
 
     # Update block occupied count
     block = db.query(Block).filter(Block.id == "blk-a").first()
@@ -204,10 +225,26 @@ def deallocate_room(
     student.bed_number = None
 
     # Remove student from room occupants list
+    old_bed = student.bed_number or "Bed"
     new_occupants = [o for o in (room.occupants or []) if o.get("id") != student.id]
     room.occupants = new_occupants
     room.occupied = len(new_occupants)
     room.status = "available"
+
+    # Record in Allocation History
+    hist = AllocationHistory(
+        id=f"hist-dealloc-{uuid_gen()}",
+        student_id=student.id,
+        student_name=student.full_name,
+        student_roll=student.roll_no,
+        room_number=room.number,
+        bed_number=old_bed,
+        action="deallocate",
+        performed_by="admin",
+        reason=payload.reason or "Deallocated by Administrator",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(hist)
 
     # Update block occupied count
     block = db.query(Block).filter(Block.id == "blk-a").first()
@@ -231,6 +268,151 @@ def deallocate_room(
         "amenities": room.amenities or [],
         "occupants": room.occupants or [],
     }
+
+
+@router.post("/rooms/{room_id}/transfer")
+@router.post("/api/rooms/{room_id}/transfer")
+def transfer_room(
+    room_id: str,
+    payload: TransferRequest,
+    db: Session = Depends(get_db),
+):
+    source_room = db.query(Room).filter((Room.id == room_id) | (Room.number == room_id)).first()
+    if not source_room:
+        raise HTTPException(status_code=404, detail="Source room not found")
+
+    target_room = db.query(Room).filter((Room.id == payload.target_room_id) | (Room.number == payload.target_room_id)).first()
+    if not target_room:
+        raise HTTPException(status_code=404, detail="Target room not found")
+
+    student = db.query(Profile).filter(Profile.id == payload.student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Check if target bed is occupied
+    target_bed_occupied = db.query(Allocation).filter(
+        Allocation.room_number == target_room.number,
+        Allocation.bed_number == payload.target_bed_number,
+        Allocation.is_active == True,
+    ).first()
+    if target_bed_occupied and target_bed_occupied.student_id != student.id:
+        raise HTTPException(status_code=400, detail=f"{payload.target_bed_number} in Room {target_room.number} is already occupied")
+
+    # Atomic transfer in single transaction
+    # 1. End old active allocations
+    old_allocs = db.query(Allocation).filter(
+        Allocation.student_id == student.id,
+        Allocation.is_active == True,
+    ).all()
+    for a in old_allocs:
+        a.is_active = False
+        a.deallocated_at = datetime.now(timezone.utc)
+
+    # 2. Remove from source room occupants
+    source_occupants = [o for o in (source_room.occupants or []) if o.get("id") != student.id]
+    source_room.occupants = source_occupants
+    source_room.occupied = len(source_occupants)
+    source_room.status = "available"
+
+    # 3. Create new allocation
+    new_alloc = Allocation(
+        id=f"alloc-{uuid_gen()}",
+        student_id=student.id,
+        room_id=target_room.id,
+        room_number=target_room.number,
+        bed_number=payload.target_bed_number,
+        is_active=True,
+    )
+    db.add(new_alloc)
+
+    # 4. Add to target room occupants
+    target_occupants = [o for o in (target_room.occupants or []) if o.get("id") != student.id]
+    target_occupants.append({
+        "id": student.id,
+        "name": student.full_name,
+        "rollNo": student.roll_no or "",
+        "bed": payload.target_bed_number,
+        "course": student.course or "",
+        "avatar": student.avatar_url or "",
+    })
+    target_room.occupants = target_occupants
+    target_room.occupied = len(target_occupants)
+    target_room.status = "occupied" if target_room.occupied >= (target_room.capacity or 4) else "available"
+
+    # 5. Update student profile
+    student.room_number = target_room.number
+    student.bed_number = payload.target_bed_number
+    student.block_name = target_room.block_name or "Block A (Newton)"
+
+    # 6. Record transfer in AllocationHistory
+    hist = AllocationHistory(
+        id=f"hist-trans-{uuid_gen()}",
+        student_id=student.id,
+        student_name=student.full_name,
+        student_roll=student.roll_no,
+        room_number=f"{source_room.number} -> {target_room.number}",
+        bed_number=payload.target_bed_number,
+        action="transfer",
+        performed_by="admin",
+        reason=payload.reason or f"Transferred from {source_room.number} to {target_room.number}",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(hist)
+
+    db.commit()
+    db.refresh(source_room)
+    db.refresh(target_room)
+
+    return {
+        "success": True,
+        "sourceRoom": {
+            "id": source_room.id,
+            "number": source_room.number,
+            "occupied": source_room.occupied,
+            "capacity": source_room.capacity,
+            "occupants": source_room.occupants,
+        },
+        "targetRoom": {
+            "id": target_room.id,
+            "number": target_room.number,
+            "occupied": target_room.occupied,
+            "capacity": target_room.capacity,
+            "occupants": target_room.occupants,
+        },
+        "student": {
+            "id": student.id,
+            "name": student.full_name,
+            "roomNumber": student.room_number,
+            "bedNumber": student.bed_number,
+        }
+    }
+
+
+@router.get("/rooms/{room_id}/history")
+@router.get("/api/rooms/{room_id}/history")
+def get_room_history(room_id: str, db: Session = Depends(get_db)):
+    room = db.query(Room).filter((Room.id == room_id) | (Room.number == room_id)).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    history = db.query(AllocationHistory).filter(
+        (AllocationHistory.room_number == room.number) |
+        (AllocationHistory.room_number.contains(room.number))
+    ).order_by(AllocationHistory.created_at.desc()).all()
+    return [
+        {
+            "id": h.id,
+            "studentId": h.student_id,
+            "studentName": h.student_name,
+            "studentRoll": h.student_roll,
+            "roomNumber": h.room_number,
+            "bedNumber": h.bed_number,
+            "action": h.action,
+            "performedBy": h.performed_by,
+            "reason": h.reason,
+            "timestamp": h.created_at.isoformat() if h.created_at else "",
+        }
+        for h in history
+    ]
 
 
 def uuid_gen() -> str:

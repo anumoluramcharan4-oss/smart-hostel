@@ -83,6 +83,60 @@ HostelOS features a role switcher in the top bar and `/login` page:
 
 ---
 
+## Demo Credentials & Portals
+
+HostelOS provides instant quick-switch buttons as well as credential authentication:
+
+| Role | Name | Email | Password | Assigned Unit / Scope |
+| :--- | :--- | :--- | :--- | :--- |
+| **Chief Administrator** | Chief Administrator | `admin@hostelos.edu` | `password123` | Full Campus HQ (`/admin`) |
+| **Resident Warden** | Prof. Rajesh K. Sharma | `rajesh.sharma@hostelos.edu` | `password123` | Block A (Newton) (`/warden`) |
+| **Student Resident 1** | Aarav Patel | `aarav.patel@hostelos.edu` | `password123` | Room A-101 · Bed 1 (`/student`) |
+| **Student Resident 2** | Kabir Sen | `kabir.sen@hostelos.edu` | `password123` | Room A-101 · Bed 2 (`/student`) |
+| **Student Resident 3** | Dev Dixit | `dev.dixit@hostelos.edu` | `password123` | Room A-101 · Bed 3 (`/student`) |
+
+---
+
+## Hostel Architecture & Seeding
+
+The hostel structure has been standardized to a single high-density building with 100% full allocation:
+- **1 Building**: Block A (Newton), Undergrad Men's Wing
+- **5 Floors**, 6 quad rooms per floor = **30 rooms total** (`A-101` to `A-506`)
+- **4 beds per room** (`Bed 1` to `Bed 4`) = **120 beds total**
+- **120 Students**, all allocated (100.0% occupancy rate, 0 vacant beds)
+- 120 unique, realistic Indian male names spread across academic Years 1–4 and engineering streams (BCS, BEC, BME, BCE, BIT)
+- 25 maintenance complaint tickets with room and block tagging
+- 120 fee records (70% Paid, 20% Pending, 10% Partial)
+
+### How to Re-run Database Seed (Idempotent)
+To re-seed the SQLite database idempotently in a single transaction:
+```bash
+PYTHONPATH=. ./venv/bin/python backend/seed.py
+```
+To seed Supabase directly:
+```bash
+# Execute supabase_seed.sql in your Supabase SQL Editor
+```
+
+### Database Migrations (Alembic)
+```bash
+PYTHONPATH=. ./venv/bin/alembic upgrade head
+```
+
+### Running Test Suite
+Execute the pytest suite covering double-booking rejection, single active allocation constraint, deallocate/re-allocate flow, atomic transfers, and floor filtering:
+```bash
+PYTHONPATH=. ./venv/bin/pytest tests/ -v
+```
+
+### How to Restore Database from Backup
+Backups are archived in the `backups/` directory:
+```bash
+cp backups/smart_hostel_backup_20261102_231651.db smart_hostel.db
+```
+
+---
+
 ## License & Copyright
 
-© 2025 HostelOS Systems Inc. All rights reserved.
+© 2026 HostelOS Systems Inc. All rights reserved.

@@ -19,7 +19,7 @@ import {
 import { determineAutoPriority } from './priority-helper'
 import studentsData from './students_data.json'
 
-const USE_API = process.env.NEXT_PUBLIC_USE_API === 'true'
+const USE_API = process.env.NEXT_PUBLIC_USE_API !== 'false'
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // Helpers to sync state across browser tabs and page navigations
@@ -244,6 +244,13 @@ const delay = (ms: number = 200) => new Promise((resolve) => setTimeout(resolve,
 export const api = {
   // Stats - Real-Time Dynamic Calculation from Supabase
   async getDashboardStats(): Promise<DashboardStats> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/stats`)
+      if (res.ok) {
+        return await res.json()
+      }
+    } catch {}
+
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -335,6 +342,24 @@ export const api = {
     floor?: number | string
     unallocatedOnly?: boolean
   }): Promise<Student[]> {
+    // 1. Primary: Live FastAPI Backend API (Single Source of Truth)
+    try {
+      const query = new URLSearchParams()
+      if (params?.search) query.set('search', params.search)
+      if (params?.block && params.block !== 'all') query.set('block', params.block)
+      if (params?.feeStatus && params.feeStatus !== 'all') query.set('fee_status', params.feeStatus)
+      if (params?.floor && params.floor !== 'all' && Number(params.floor) > 0) query.set('floor', String(params.floor))
+      if (params?.unallocatedOnly) query.set('unallocated_only', 'true')
+      const res = await fetch(`${API_BASE_URL}/api/students?${query.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0) {
+          return data
+        }
+      }
+    } catch {}
+
+    // 2. Secondary: Supabase if available
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -355,7 +380,7 @@ export const api = {
           query = query.eq('fee_status', params.feeStatus)
         }
         const { data, error } = await query
-        if (!error && data && data.length > 0) {
+        if (!error && data && data.length > 1) {
           return data.map((p: any) => ({
             id: p.id,
             name: p.full_name || p.name || 'Student',
@@ -379,17 +404,6 @@ export const api = {
       } catch {
         // Fallback to local
       }
-    }
-    if (USE_API) {
-      const query = new URLSearchParams()
-      if (params?.search) query.set('search', params.search)
-      if (params?.block) query.set('block', params.block)
-      if (params?.feeStatus) query.set('fee_status', params.feeStatus)
-      if (params?.floor && params.floor !== 'all') query.set('floor', String(params.floor))
-      if (params?.unallocatedOnly) query.set('unallocated_only', 'true')
-      const res = await fetch(`${API_BASE_URL}/api/students?${query.toString()}`)
-      if (!res.ok) throw new Error('Failed to fetch students')
-      return res.json()
     }
     await delay(100)
     let list = [...mutableStudents]
@@ -518,6 +532,22 @@ export const api = {
     floor?: number | string
     status?: string
   }): Promise<Room[]> {
+    // 1. Primary: Live FastAPI Backend API
+    try {
+      const query = new URLSearchParams()
+      if (params?.blockId && params.blockId !== 'all') query.set('block_id', params.blockId)
+      if (params?.status && params.status !== 'all') query.set('status', params.status)
+      if (params?.floor && params.floor !== 'all' && Number(params.floor) > 0) query.set('floor', String(params.floor))
+      const res = await fetch(`${API_BASE_URL}/api/rooms?${query.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0) {
+          return data
+        }
+      }
+    } catch {}
+
+    // 2. Secondary: Supabase fallback
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -533,7 +563,7 @@ export const api = {
           query = query.eq('status', params.status)
         }
         const { data, error } = await query
-        if (!error && data && data.length > 0) {
+        if (!error && data && data.length > 2) {
           return data.map((r: any) => ({
             id: r.id,
             number: r.number,
@@ -551,15 +581,6 @@ export const api = {
       } catch {
         // Fallback
       }
-    }
-    if (USE_API) {
-      const query = new URLSearchParams()
-      if (params?.blockId) query.set('block_id', params.blockId)
-      if (params?.status) query.set('status', params.status)
-      if (params?.floor && params.floor !== 'all') query.set('floor', String(params.floor))
-      const res = await fetch(`${API_BASE_URL}/api/rooms?${query.toString()}`)
-      if (!res.ok) throw new Error('Failed to fetch rooms')
-      return res.json()
     }
     await delay(100)
     let list = [...mutableRooms]
@@ -733,13 +754,13 @@ export const api = {
     return updatedRoom
   },
 
-  async deallocateRoom(roomId: string, studentId: string): Promise<Room> {
+  async deallocateRoom(roomId: string, studentId: string, reason?: string): Promise<Room> {
     if (USE_API) {
       try {
         const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/deallocate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ student_id: studentId }),
+          body: JSON.stringify({ student_id: studentId, reason }),
         })
         if (res.ok) {
           const updated = await res.json()
@@ -812,6 +833,45 @@ export const api = {
     }
 
     return updatedRoom
+  },
+
+  async transferStudent(
+    sourceRoomId: string,
+    studentId: string,
+    targetRoomId: string,
+    targetBedNumber: string,
+    reason?: string
+  ): Promise<any> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/rooms/${sourceRoomId}/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: studentId,
+          target_room_id: targetRoomId,
+          target_bed_number: targetBedNumber,
+          reason,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Transfer failed')
+      }
+      return res.json()
+    }
+    // Fallback: deallocate then allocate
+    await this.deallocateRoom(sourceRoomId, studentId, reason)
+    return this.allocateRoom(targetRoomId, studentId, targetBedNumber)
+  },
+
+  async getRoomHistory(roomId: string): Promise<any[]> {
+    if (USE_API) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/history`)
+        if (res.ok) return res.json()
+      } catch {}
+    }
+    return []
   },
 
   // Complaints
@@ -1311,6 +1371,15 @@ export const api = {
 
   // Fees
   async getFees(params?: { studentId?: string; status?: string }): Promise<FeeRecord[]> {
+    if (USE_API) {
+      try {
+        const query = new URLSearchParams()
+        if (params?.studentId) query.set('student_id', params.studentId)
+        if (params?.status) query.set('status', params.status)
+        const res = await fetch(`${API_BASE_URL}/api/fees?${query.toString()}`)
+        if (res.ok) return res.json()
+      } catch {}
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')

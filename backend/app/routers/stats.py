@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.app.db.session import get_db
-from backend.app.models.hostel import Room, Profile, Allocation, Block
+from backend.app.models.hostel import Room, Profile, Allocation, Block, Complaint, FeeRecord, PaymentTransaction
 
 router = APIRouter(tags=["Stats"])
 
@@ -21,7 +21,7 @@ def get_stats(db: Session = Depends(get_db)):
     total_capacity = db.query(func.sum(Room.capacity)).scalar() or 120
     active_allocations = db.query(Allocation).filter(Allocation.is_active == True).count()
 
-    available_beds = max(0, total_capacity - active_allocations)
+    available_beds = max(0, int(total_capacity) - active_allocations)
     occupancy_rate = (
         round((active_allocations / total_capacity) * 100, 1)
         if total_capacity > 0
@@ -30,10 +30,26 @@ def get_stats(db: Session = Depends(get_db)):
 
     # Fee metrics
     total_fees_pending = (
-        db.query(func.sum(Profile.fee_amount_due))
-        .filter(Profile.role == "student", Profile.fee_status != "paid")
+        db.query(func.sum(FeeRecord.pending_amount)).scalar() or 0
+    )
+    total_fees_collected = (
+        db.query(func.sum(FeeRecord.paid_amount)).scalar() or 0
+    )
+
+    # Complaints
+    pending_complaints = (
+        db.query(Complaint).filter(Complaint.status != "resolved").count()
+    )
+    resolved_complaints = (
+        db.query(Complaint).filter(Complaint.status == "resolved").count()
+    )
+
+    # Attendance
+    avg_attendance = (
+        db.query(func.avg(Profile.attendance_percent))
+        .filter(Profile.role == "student")
         .scalar()
-        or 4500
+        or 96.5
     )
 
     return {
@@ -46,11 +62,11 @@ def get_stats(db: Session = Depends(get_db)):
         "occupancyRate": occupancy_rate,
         "totalBuildings": 1,
         "totalFloors": 5,
-        "pendingComplaints": 1,
-        "resolvedComplaints": 0,
-        "totalFeesCollected": 125000,
+        "pendingComplaints": pending_complaints,
+        "resolvedComplaints": resolved_complaints,
+        "totalFeesCollected": float(total_fees_collected),
         "totalFeesPending": float(total_fees_pending),
-        "todayAttendancePercent": 96.5,
+        "todayAttendancePercent": round(float(avg_attendance), 1),
     }
 
 

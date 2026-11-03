@@ -16,6 +16,9 @@ from backend.app.routers import (
     rooms,
     students,
     stats,
+    complaints,
+    fees,
+    notices,
 )
 
 # Auto-create database tables on startup
@@ -48,6 +51,9 @@ app.add_middleware(
 app.include_router(rooms.router)
 app.include_router(students.router)
 app.include_router(stats.router)
+app.include_router(complaints.router)
+app.include_router(fees.router)
+app.include_router(notices.router)
 
 app.include_router(visitors.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")

@@ -24,7 +24,7 @@ def get_students(
     if unallocated_only:
         query = query.filter((Profile.room_number == None) | (Profile.room_number == ""))
     elif floor is not None and floor > 0:
-        query = query.filter(Profile.room_number.like(f"A-{floor}%"))
+        query = query.join(Room, Profile.room_number == Room.number).filter(Room.floor == floor)
 
     if fee_status and fee_status != "all":
         query = query.filter(Profile.fee_status == fee_status)

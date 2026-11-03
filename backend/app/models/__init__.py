@@ -4,7 +4,17 @@ from .asset import Asset, ConsumableItem, AssetMovement, AssetDamageReport, Inve
 from .parcel import Parcel, ParcelPickupCode, ParcelEvent, ParcelStatus
 from .laundry import LaundryRate, LaundrySlot, LaundryOrder, LaundryOrderItem, LaundryStatusEvent
 from .inspection import InspectionTemplate, InspectionTemplateItem, Inspection, InspectionResult, CorrectiveAction
-from .hostel import Block, Room, Profile, Allocation
+from .hostel import (
+    Block,
+    Room,
+    Profile,
+    Allocation,
+    AllocationHistory,
+    Complaint,
+    FeeRecord,
+    PaymentTransaction,
+    Notice,
+)
 
 __all__ = [
     "Visitor", "VisitorPass", "VisitorEvent", "VisitorStatus", "VisitorCategory",
@@ -12,5 +22,5 @@ __all__ = [
     "Parcel", "ParcelPickupCode", "ParcelEvent", "ParcelStatus",
     "LaundryRate", "LaundrySlot", "LaundryOrder", "LaundryOrderItem", "LaundryStatusEvent",
     "InspectionTemplate", "InspectionTemplateItem", "Inspection", "InspectionResult", "CorrectiveAction",
-    "Block", "Room", "Profile", "Allocation"
+    "Block", "Room", "Profile", "Allocation", "AllocationHistory", "Complaint", "FeeRecord", "PaymentTransaction", "Notice"
 ]

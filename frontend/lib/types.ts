@@ -163,10 +163,14 @@ export interface AttendanceDaySummary {
 export interface DashboardStats {
   totalStudents: number
   totalRooms: number
+  totalCapacity?: number
   occupiedRooms: number
+  availableBeds?: number
   occupancyRate: number
   pendingComplaints: number
+  openComplaints?: number
   resolvedComplaints: number
+  criticalComplaints?: number
   totalFeesCollected: number
   totalFeesPending: number
   todayAttendancePercent: number

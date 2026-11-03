@@ -58,7 +58,7 @@ class Profile(Base):
     room_number = Column(String, nullable=True, index=True)
     block_name = Column(String, nullable=True)
     bed_number = Column(String, nullable=True)
-    roll_no = Column(String, nullable=True, index=True)
+    roll_no = Column(String, unique=True, nullable=True, index=True)
     course = Column(String, nullable=True)
     year = Column(Integer, default=1)
     guardian_name = Column(String, nullable=True)
@@ -99,4 +99,82 @@ class Allocation(Base):
             postgresql_where=text("is_active = TRUE"),
         ),
     )
+
+
+class AllocationHistory(Base):
+    __tablename__ = "allocation_history"
+
+    id = Column(String, primary_key=True)
+    student_id = Column(String, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_name = Column(String, nullable=False)
+    student_roll = Column(String, nullable=True)
+    room_number = Column(String, nullable=False)
+    bed_number = Column(String, nullable=False)
+    action = Column(String, nullable=False)  # 'allocate' | 'deallocate' | 'transfer'
+    performed_by = Column(String, default="admin")
+    reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Complaint(Base):
+    __tablename__ = "complaints"
+
+    id = Column(String, primary_key=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    priority = Column(String, default="medium")
+    status = Column(String, default="pending")
+    student_id = Column(String, ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True)
+    student_name = Column(String, nullable=True)
+    room_number = Column(String, nullable=True)
+    block_name = Column(String, default="Block A (Newton)")
+    assigned_to = Column(String, nullable=True)
+    resolution_notes = Column(String, nullable=True)
+    timeline = Column(JSON, default=list)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class FeeRecord(Base):
+    __tablename__ = "fees"
+
+    id = Column(String, primary_key=True)
+    student_id = Column(String, ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_name = Column(String, nullable=False)
+    roll_no = Column(String, nullable=True)
+    room_number = Column(String, nullable=True)
+    term = Column(String, default="Term 1, Autumn 2026-2027")
+    total_amount = Column(Numeric, nullable=False, default=45000)
+    paid_amount = Column(Numeric, nullable=False, default=45000)
+    pending_amount = Column(Numeric, nullable=False, default=0)
+    status = Column(String, default="paid")  # 'paid' | 'pending' | 'partial'
+    due_date = Column(String, default="2026-11-30")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PaymentTransaction(Base):
+    __tablename__ = "payments"
+
+    id = Column(String, primary_key=True)
+    fee_id = Column(String, ForeignKey("fees.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(String, nullable=False)
+    amount = Column(Numeric, nullable=False)
+    payment_method = Column(String, default="UPI")
+    transaction_ref = Column(String, unique=True, nullable=False)
+    paid_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Notice(Base):
+    __tablename__ = "notices"
+
+    id = Column(String, primary_key=True)
+    title = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    category = Column(String, default="general")
+    priority = Column(String, default="normal")
+    author = Column(String, default="Hostel Administration")
+    target_audience = Column(String, default="all")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=True)
 

@@ -49,8 +49,8 @@ export default function AdminStudentsPage() {
         return (
           <div className="flex items-center gap-3">
             <Avatar name={std.name} size="sm" className="shrink-0" />
-            <div>
-              <p className="font-semibold text-foreground text-xs sm:text-sm">
+            <div className="min-w-0" title={std.name}>
+              <p className="font-semibold text-foreground text-xs sm:text-sm truncate max-w-[220px]">
                 {std.name}
               </p>
               <p className="text-[11px] text-muted-foreground font-mono">
