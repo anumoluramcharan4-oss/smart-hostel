@@ -14,6 +14,9 @@ from .hostel import (
     FeeRecord,
     PaymentTransaction,
     Notice,
+    Staff,
+    Warden,
+    WardenGrievance,
 )
 
 __all__ = [
@@ -22,5 +25,6 @@ __all__ = [
     "Parcel", "ParcelPickupCode", "ParcelEvent", "ParcelStatus",
     "LaundryRate", "LaundrySlot", "LaundryOrder", "LaundryOrderItem", "LaundryStatusEvent",
     "InspectionTemplate", "InspectionTemplateItem", "Inspection", "InspectionResult", "CorrectiveAction",
-    "Block", "Room", "Profile", "Allocation", "AllocationHistory", "Complaint", "FeeRecord", "PaymentTransaction", "Notice"
+    "Block", "Room", "Profile", "Allocation", "AllocationHistory", "Complaint", "FeeRecord", "PaymentTransaction", "Notice", "Staff",
+    "Warden", "WardenGrievance"
 ]

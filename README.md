@@ -20,7 +20,22 @@ HostelOS is an enterprise-grade, modern SaaS platform engineered for university 
 
 ---
 
-## Mac Quick Start Guide
+## Quick Start (Single Command)
+
+To run the entire app (both FastAPI backend on port 8000 and Next.js frontend on port 3000) with a single command:
+
+```bash
+./start.sh
+```
+
+- **Frontend**: [http://localhost:3000](http://localhost:3000)
+- **FastAPI Core**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Press **Ctrl+C** to shut down both servers cleanly.
+
+---
+
+## Mac Manual Start Guide
 
 ### 1. Prerequisites
 Ensure Node.js 18+ and Python 3.10+ are installed on your Mac:

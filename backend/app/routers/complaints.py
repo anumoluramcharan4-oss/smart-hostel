@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from backend.app.db.session import get_db
-from backend.app.models.hostel import Complaint, Profile
+from backend.app.models.hostel import Complaint, Profile, Staff
 
 router = APIRouter(tags=["Complaints"])
 
@@ -20,7 +20,7 @@ class ComplaintCreate(BaseModel):
     student_id: Optional[str] = None
     student_name: Optional[str] = None
     room_number: Optional[str] = None
-    block_name: Optional[str] = "Block A (Newton)"
+    block_name: Optional[str] = None
 
 
 class ComplaintStatusUpdate(BaseModel):
@@ -28,6 +28,28 @@ class ComplaintStatusUpdate(BaseModel):
     note: Optional[str] = None
     assigned_to: Optional[str] = None
     priority: Optional[str] = None
+
+
+@router.get("/staff")
+@router.get("/api/staff")
+def get_staff(trade: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Staff)
+    if trade and trade != "all":
+        query = query.filter(Staff.trade.ilike(f"%{trade.strip()}%"))
+    staff_list = query.order_by(Staff.trade, Staff.name).all()
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "phone": s.phone,
+            "trade": s.trade,
+            "status": s.status,
+            "role": s.trade,
+            "specialty": s.trade,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+        for s in staff_list
+    ]
 
 
 @router.get("/complaints")
@@ -95,8 +117,8 @@ def create_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
         status=payload.status or "pending",
         student_id=payload.student_id,
         student_name=student_name or "Student Resident",
-        room_number=payload.room_number or "A-101",
-        block_name=payload.block_name or "Block A (Newton)",
+        room_number=payload.room_number,
+        block_name=payload.block_name,
         timeline=[
             {
                 "status": payload.status or "pending",

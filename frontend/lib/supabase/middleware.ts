@@ -6,9 +6,12 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'placeholder-anon-key'
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    url,
+    key,
     {
       cookies: {
         getAll() {
@@ -27,10 +30,16 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Use getUser() to validate auth status with Supabase Auth server securely
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Use getUser() to validate auth status with Supabase Auth server securely (graceful fallback if offline)
+  let user = null
+  try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+      const { data } = await supabase.auth.getUser()
+      user = data?.user || null
+    }
+  } catch {
+    user = null
+  }
 
   const demoRole = request.cookies.get('hostelos_demo_role')?.value
   const pathname = request.nextUrl.pathname

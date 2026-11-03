@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { api } from '@/lib/api'
-import { createClient } from '@/lib/supabase/client'
 import { StatCard } from '@/components/common/StatCard'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { formatDate } from '@/lib/utils'
@@ -28,35 +27,16 @@ export default function WardenDashboardPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
-  // Real-time Supabase subscription for complaints
-  useEffect(() => {
-    const supabase = createClient()
-    const channel = supabase
-      .channel('warden-dash-complaints-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'complaints' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
-          queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [queryClient])
-
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: () => api.getDashboardStats(),
+    refetchInterval: 15000,
   })
 
   const { data: complaints = [], isLoading: isLoadingComplaints } = useQuery({
     queryKey: ['warden-complaints'],
     queryFn: () => api.getComplaints(),
-    refetchInterval: 1500,
+    refetchInterval: 15000,
   })
 
   const { data: blocks = [] } = useQuery({

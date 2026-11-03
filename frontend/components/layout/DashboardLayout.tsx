@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { MobileNav } from './MobileNav'
+import { BackendHealthBanner } from './BackendHealthBanner'
 import { useAuth } from '@/lib/auth-context'
 import { Role } from '@/lib/types'
 import { X, Building } from 'lucide-react'
@@ -183,6 +184,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       Complaints &amp; Tickets
                     </NextLink>
                     <NextLink
+                      href="/admin/staff"
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className="block px-3 py-2 rounded-xl text-sm font-medium hover:bg-muted"
+                    >
+                      Staff &amp; Workers
+                    </NextLink>
+                    <NextLink
                       href="/admin/notices"
                       onClick={() => setMobileDrawerOpen(false)}
                       className="block px-3 py-2 rounded-xl text-sm font-medium hover:bg-muted"
@@ -222,6 +230,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0 h-screen overflow-hidden pb-20 md:pb-0">
+        <BackendHealthBanner />
         <Topbar onToggleMobileMenu={() => setMobileDrawerOpen(true)} />
 
         <main className="flex-1 w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 overflow-y-auto animate-fade-in">

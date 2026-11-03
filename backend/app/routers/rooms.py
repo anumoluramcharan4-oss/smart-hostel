@@ -50,8 +50,8 @@ def get_rooms(
         {
             "id": r.id,
             "number": r.number,
-            "blockId": r.block_id or "blk-a",
-            "blockName": r.block_name or "Block A (Newton)",
+            "blockId": r.block_id,
+            "blockName": r.block_name or "",
             "floor": r.floor,
             "type": r.type or "quad",
             "capacity": r.capacity or 4,
@@ -73,8 +73,8 @@ def get_room(room_id: str, db: Session = Depends(get_db)):
     return {
         "id": room.id,
         "number": room.number,
-        "blockId": room.block_id or "blk-a",
-        "blockName": room.block_name or "Block A (Newton)",
+        "blockId": room.block_id,
+        "blockName": room.block_name or "",
         "floor": room.floor,
         "type": room.type or "quad",
         "capacity": room.capacity or 4,
@@ -140,7 +140,7 @@ def allocate_room(
     # Update student profile
     student.room_number = room.number
     student.bed_number = target_bed
-    student.block_name = room.block_name or "Block A (Newton)"
+    student.block_name = room.block_name
 
     # Update room occupants
     current_occupants = [o for o in (room.occupants or []) if o.get("id") != student.id]
@@ -173,7 +173,7 @@ def allocate_room(
     db.add(hist)
 
     # Update block occupied count
-    block = db.query(Block).filter(Block.id == "blk-a").first()
+    block = db.query(Block).filter(Block.id == room.block_id).first()
     if block:
         total_occ = db.query(Allocation).filter(Allocation.is_active == True).count()
         block.occupied = total_occ
@@ -184,8 +184,8 @@ def allocate_room(
     return {
         "id": room.id,
         "number": room.number,
-        "blockId": room.block_id or "blk-a",
-        "blockName": room.block_name or "Block A (Newton)",
+        "blockId": room.block_id,
+        "blockName": room.block_name or "",
         "floor": room.floor,
         "type": room.type or "quad",
         "capacity": room.capacity or 4,
@@ -247,7 +247,7 @@ def deallocate_room(
     db.add(hist)
 
     # Update block occupied count
-    block = db.query(Block).filter(Block.id == "blk-a").first()
+    block = db.query(Block).filter(Block.id == room.block_id).first()
     if block:
         total_occ = db.query(Allocation).filter(Allocation.is_active == True).count()
         block.occupied = total_occ
@@ -258,8 +258,8 @@ def deallocate_room(
     return {
         "id": room.id,
         "number": room.number,
-        "blockId": room.block_id or "blk-a",
-        "blockName": room.block_name or "Block A (Newton)",
+        "blockId": room.block_id,
+        "blockName": room.block_name or "",
         "floor": room.floor,
         "type": room.type or "quad",
         "capacity": room.capacity or 4,
@@ -342,7 +342,7 @@ def transfer_room(
     # 5. Update student profile
     student.room_number = target_room.number
     student.bed_number = payload.target_bed_number
-    student.block_name = target_room.block_name or "Block A (Newton)"
+    student.block_name = target_room.block_name
 
     # 6. Record transfer in AllocationHistory
     hist = AllocationHistory(

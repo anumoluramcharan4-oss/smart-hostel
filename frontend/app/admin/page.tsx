@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import NextLink from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/lib/supabase/client'
 import { api } from '@/lib/api'
 import {
   Complaint,
@@ -131,9 +130,7 @@ export default function AdminDashboardPage() {
     return () => window.removeEventListener('storage', handleStorageChange)
   }, [queryClient])
 
-  const supabase = useMemo(() => createClient(), [])
-
-  // 1. Real Supabase Complaints Query (with API / Local fallback)
+  // 1. Complaints Query (with API / Local fallback)
   const {
     data: supabaseComplaints = [],
     isLoading: isLoadingComplaints,
@@ -160,17 +157,17 @@ export default function AdminDashboardPage() {
         updated_at: c.updatedAt,
       }))
     },
-    refetchInterval: 2000,
+    refetchInterval: 15000,
   })
 
   // Real-time Overview Stats
   const { data: dashboardStats } = useQuery({
     queryKey: ['admin-dashboard-stats'],
     queryFn: () => api.getDashboardStats(),
-    refetchInterval: 2000,
+    refetchInterval: 15000,
   })
 
-  // 2. Real Supabase Rooms Query
+  // 2. Rooms Query
   const {
     data: supabaseRooms = [],
     isLoading: isLoadingRooms,
@@ -179,15 +176,12 @@ export default function AdminDashboardPage() {
   } = useQuery({
     queryKey: ['admin-supabase-rooms'],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase.from('rooms').select('*')
-        if (!error && data && data.length > 0) return data
-      } catch {}
       return await api.getRooms()
     },
+    refetchInterval: 15000,
   })
 
-  // 3. Real Supabase Profiles Query
+  // 3. Profiles Query
   const {
     data: supabaseProfiles = [],
     isLoading: isLoadingProfiles,
@@ -196,16 +190,13 @@ export default function AdminDashboardPage() {
   } = useQuery({
     queryKey: ['admin-supabase-profiles'],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase.from('profiles').select('*')
-        if (!error && data && data.length > 0) return data
-      } catch {}
       const st = await api.getStudents()
       return st.map((s) => ({ ...s, role: 'student' }))
     },
+    refetchInterval: 15000,
   })
 
-  // 4. Real Supabase Payments Query
+  // 4. Payments Query
   const {
     data: supabasePayments = [],
     isLoading: isLoadingPayments,
@@ -214,15 +205,12 @@ export default function AdminDashboardPage() {
   } = useQuery({
     queryKey: ['admin-supabase-payments'],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase.from('payments').select('*')
-        if (!error && data && data.length > 0) return data
-      } catch {}
       const fees = await api.getFees()
       return fees
         .filter((f) => f.status === 'paid')
         .map((f) => ({ id: f.id, amount: f.amount, status: 'completed' }))
     },
+    refetchInterval: 15000,
   })
 
   // Warden Directory: strictly ONE campus block (Block A - Newton)
@@ -490,13 +478,6 @@ export default function AdminDashboardPage() {
         priorityVal
       )
 
-      try {
-        await supabase
-          .from('complaints')
-          .update({ status: 'in_progress' })
-          .eq('id', assignTicket.id)
-      } catch {}
-
       queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
@@ -517,13 +498,6 @@ export default function AdminDashboardPage() {
         'resolved',
         'Inspection confirmed & issue signed off by Chief Administrator'
       )
-
-      try {
-        await supabase
-          .from('complaints')
-          .update({ status: 'resolved' })
-          .eq('id', ticketId)
-      } catch {}
 
       queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
@@ -550,13 +524,6 @@ export default function AdminDashboardPage() {
         newPriority
       )
 
-      try {
-        await supabase
-          .from('complaints')
-          .update({ priority: newPriority })
-          .eq('id', ticketId)
-      } catch {}
-
       queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
@@ -576,12 +543,6 @@ export default function AdminDashboardPage() {
     if (!confirm(`Are you sure you want to permanently remove ticket #${ticketId}?`)) return
     try {
       await api.deleteComplaint(ticketId)
-      try {
-        await supabase
-          .from('complaints')
-          .delete()
-          .eq('id', ticketId)
-      } catch {}
       toast.success(`Ticket #${ticketId} removed successfully`)
       queryClient.invalidateQueries({ queryKey: ['admin-supabase-complaints'] })
       queryClient.invalidateQueries({ queryKey: ['admin-all-complaints'] })

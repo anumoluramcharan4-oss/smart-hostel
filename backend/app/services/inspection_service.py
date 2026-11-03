@@ -62,7 +62,7 @@ class InspectionService:
         inspection = Inspection(
             inspection_ref=ref,
             template_id=template_id,
-            building="Main Campus",
+            building=getattr(data, "building", "Main Building") or "Main Building",
             block=data.block,
             floor=data.floor,
             room_number=data.room_number,
@@ -168,7 +168,7 @@ class InspectionService:
         overdue = db.query(Inspection).filter(Inspection.status == InspectionStatus.OVERDUE).count()
 
         all_scored = db.query(Inspection).filter(Inspection.cleanliness_score != None).all()
-        avg_score = round(sum(i.cleanliness_score for i in all_scored) / len(all_scored), 1) if all_scored else 88.5
+        avg_score = round(sum(i.cleanliness_score for i in all_scored) / len(all_scored), 1) if all_scored else 0.0
 
         return {
             "scheduled_count": scheduled,

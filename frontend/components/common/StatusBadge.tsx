@@ -61,6 +61,13 @@ const statusConfig: Record<
     border: 'border-emerald-500/20 dark:border-emerald-500/30',
     dot: 'bg-emerald-500',
   },
+  partial: {
+    label: 'Partial',
+    bg: 'bg-purple-500/10 dark:bg-purple-500/15',
+    text: 'text-purple-700 dark:text-purple-400',
+    border: 'border-purple-500/20 dark:border-purple-500/30',
+    dot: 'bg-purple-500',
+  },
   overdue: {
     label: 'Overdue',
     bg: 'bg-rose-500/10 dark:bg-rose-500/15',

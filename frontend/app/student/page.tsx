@@ -158,14 +158,14 @@ export default function StudentDashboardPage() {
               </span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-black text-white">
-                  {user?.roomNumber || 'A-204'}
+                  {user?.roomNumber || 'A-101'}
                 </span>
                 <span className="text-xs text-slate-300 font-mono">
                   {user?.bedNumber || 'Bed 1'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                {user?.blockName || 'Block A (Newton)'} • Floor 2
+                {user?.blockName || 'Block A (Newton)'} • Floor {user?.roomNumber ? user.roomNumber.replace('A-', '')[0] : '1'}
               </p>
             </div>
 

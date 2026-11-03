@@ -19,27 +19,11 @@ from backend.app.schemas.laundry import (
     LaundryRateCreate
 )
 
-DEFAULT_RATES: Dict[str, float] = {
-    "SHIRT": 15.0,
-    "TROUSER": 18.0,
-    "BEDSHEET": 35.0,
-    "TOWEL": 12.0,
-    "JACKET": 45.0,
-    "OTHER": 20.0
-}
-
 class LaundryService:
     @staticmethod
     def seed_default_rates(db: Session):
-        if db.query(LaundryRate).count() == 0:
-            for cat, price in DEFAULT_RATES.items():
-                rate = LaundryRate(
-                    item_category=cat,
-                    service_type=LaundryServiceType.WASH_AND_IRON,
-                    rate_per_piece=price
-                )
-                db.add(rate)
-            db.commit()
+        # Rates are tenant-managed records in Supabase; never seed production prices.
+        return None
 
     @staticmethod
     def get_rates(db: Session) -> List[LaundryRate]:
@@ -110,17 +94,15 @@ class LaundryService:
 
         # 2. Server-Side Price Calculation from database rates (Never trust frontend amounts)
         rate_map = {r.item_category.upper(): r.rate_per_piece for r in db.query(LaundryRate).all()}
-        for cat, price in DEFAULT_RATES.items():
-            if cat not in rate_map:
-                rate_map[cat] = price
-
         total_pieces = 0
         total_estimated = 0.0
         order_items = []
 
         for item_in in data.items:
             cat_upper = item_in.item_category.upper()
-            unit_price = rate_map.get(cat_upper, 20.0)
+            if cat_upper not in rate_map:
+                raise HTTPException(status_code=400, detail=f"No active laundry rate configured for '{cat_upper}'")
+            unit_price = rate_map[cat_upper]
             item_total = unit_price * item_in.quantity
             total_pieces += item_in.quantity
             total_estimated += item_total
@@ -189,7 +171,9 @@ class LaundryService:
 
         for conf_item in confirmation.confirmed_counts:
             cat_upper = conf_item.item_category.upper()
-            unit_price = rate_map.get(cat_upper, 20.0)
+            if cat_upper not in rate_map:
+                raise HTTPException(status_code=400, detail=f"No laundry rate configured for '{cat_upper}'")
+            unit_price = rate_map[cat_upper]
             confirmed_total_count += conf_item.quantity
             recalculated_final += (unit_price * conf_item.quantity)
 

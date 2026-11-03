@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { createClient } from '@/lib/supabase/client'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -100,7 +99,7 @@ export default function StudentComplaintsPage() {
 
   // Grievance form state - Block determines the exact warden automatically
   const [grievanceBlock, setGrievanceBlock] = useState(user?.blockName || 'Block A (Newton)')
-  const [grievanceRoom, setGrievanceRoom] = useState(user?.roomNumber || 'A-204')
+  const [grievanceRoom, setGrievanceRoom] = useState(user?.roomNumber || 'A-101')
   const [grievanceCategory, setGrievanceCategory] = useState<GrievanceCategory>('misconduct')
   const [grievanceSubject, setGrievanceSubject] = useState('')
   const [grievanceDesc, setGrievanceDesc] = useState('')
@@ -115,8 +114,6 @@ export default function StudentComplaintsPage() {
       email: 'rajesh.sharma@hostelos.edu',
     }
 
-
-  const supabase = useMemo(() => createClient(), [])
 
   // Cross-tab real-time storage event sync
   useEffect(() => {
@@ -133,26 +130,7 @@ export default function StudentComplaintsPage() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [queryClient])
 
-  // Real-time Supabase subscription for complaints table
-  useEffect(() => {
-    const channel = supabase
-      .channel('student-complaints-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'complaints' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [supabase, queryClient])
-
-  // Facility tickets query from Supabase complaints table
-  // (Row Level Security handles ensuring students see only their own complaints)
+  // Facility tickets query
   const {
     data: complaints = [],
     isLoading,
@@ -162,46 +140,9 @@ export default function StudentComplaintsPage() {
   } = useQuery({
     queryKey: ['student-complaints', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('complaints')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        throw error
-      }
-
-      return (data || []).map((row: any): Complaint => ({
-        id: String(row.id),
-        title: row.title || 'Untitled Complaint',
-        description: row.description || '',
-        category: (row.category || 'other') as ComplaintCategory,
-        priority: (row.priority || 'medium') as ComplaintPriority,
-        status: (row.status || 'pending') as ComplaintStatus,
-        studentId: row.student_id || row.studentId || user?.id || '',
-        studentName: row.student_name || row.studentName || user?.name || 'Student',
-        roomNumber: row.room_number || row.roomNumber || user?.roomNumber || 'Room --',
-        blockName: row.block_name || row.blockName || user?.blockName || 'Hostel Block',
-        createdAt: row.created_at || row.createdAt || new Date().toISOString(),
-        updatedAt: row.updated_at || row.updatedAt || row.created_at || new Date().toISOString(),
-        assignedTo: row.assigned_to || row.assignedTo,
-        resolutionNotes: row.resolution_notes || row.resolutionNotes,
-        studentApproved: row.status === 'student_approved' || Boolean(row.student_approved),
-        studentApprovalNote: row.student_approval_note || row.studentApprovalNote,
-        timeline: Array.isArray(row.timeline)
-          ? row.timeline
-          : row.created_at
-          ? [
-              {
-                status: (row.status || 'pending') as ComplaintStatus,
-                timestamp: row.created_at,
-                note: `Complaint registered: ${row.title || 'Issue'}`,
-              },
-            ]
-          : [],
-      }))
+      return api.getComplaints({ studentId: user?.id })
     },
-    refetchInterval: 3000,
+    refetchInterval: 15000,
   })
 
   // Confidential warden grievances query (Student only views their own direct reports)
@@ -212,7 +153,7 @@ export default function StudentComplaintsPage() {
       const currentStudentId = user?.id || 'usr-student-1'
       return all.filter((g) => g.studentId === currentStudentId)
     },
-    refetchInterval: 1000,
+    refetchInterval: 15000,
   })
 
   const {

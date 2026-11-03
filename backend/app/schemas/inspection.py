@@ -16,6 +16,7 @@ class InspectionItemResultInput(BaseModel):
 
 class InspectionScheduleCreate(BaseModel):
     template_id: Optional[str] = None
+    building: Optional[str] = "Main Building"
     block: str
     floor: int = 1
     room_number: str

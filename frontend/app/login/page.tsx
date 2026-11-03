@@ -46,10 +46,10 @@ export default function LoginPage() {
     }
   }
 
-  const handleQuickLaunch = async (targetRole: Role) => {
+  const handleQuickLaunch = async (targetRole: Role, studentId?: string) => {
     setActiveQuickRole(targetRole)
     try {
-      await quickLogin(targetRole)
+      await quickLogin(targetRole, studentId)
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to switch portal')
       setActiveQuickRole(null)
@@ -188,25 +188,44 @@ export default function LoginPage() {
                     Student Portal
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                    Lodge maintenance defects (fan, electrical, water), view room details, laundry &amp; parcels.
+                    Default: Kabir Sen (Room A-101, Pending Fee). View room, dues, receipts &amp; maintenance tickets.
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleQuickLaunch('student')}
-                disabled={activeQuickRole !== null}
-                className="mt-4 w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/30 transition-all disabled:opacity-50"
-              >
-                {activeQuickRole === 'student' ? (
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                ) : (
-                  <>
-                    Open Student Portal
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </>
-                )}
-              </button>
+              <div className="space-y-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLaunch('student')}
+                  disabled={activeQuickRole !== null}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/30 transition-all disabled:opacity-50"
+                >
+                  {activeQuickRole === 'student' ? (
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    <>
+                      Open Student Portal (Kabir Sen)
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickLaunch('student', 'usr-student-4')}
+                    className="hover:text-white underline underline-offset-2"
+                  >
+                    Vihaan (Partial)
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickLaunch('student', 'usr-student-1')}
+                    className="hover:text-white underline underline-offset-2"
+                  >
+                    Aarav (Paid)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

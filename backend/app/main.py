@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 
-from backend.app.db.session import engine, Base
+from backend.app.db.session import engine, Base, log_startup_counts
 from backend.app.routers import (
     visitors,
     assets,
@@ -19,10 +19,10 @@ from backend.app.routers import (
     complaints,
     fees,
     notices,
+    wardens,
 )
 
-# Auto-create database tables on startup
-Base.metadata.create_all(bind=engine)
+# Schema changes are applied through supabase/schema.sql (or Alembic), never by the app.
 
 app = FastAPI(
     title="Smart Hostel API",
@@ -31,6 +31,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+@app.on_event("startup")
+def on_startup():
+    log_startup_counts()
 
 # CORS configuration
 app.add_middleware(
@@ -54,6 +58,7 @@ app.include_router(stats.router)
 app.include_router(complaints.router)
 app.include_router(fees.router)
 app.include_router(notices.router)
+app.include_router(wardens.router)
 
 app.include_router(visitors.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")

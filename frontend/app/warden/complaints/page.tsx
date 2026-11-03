@@ -24,7 +24,6 @@ import {
   Trash2,
 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Complaint, ComplaintPriority, ComplaintStatus } from '@/lib/types'
@@ -67,31 +66,10 @@ export default function WardenComplaintsPage() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [queryClient])
 
-  // Real-time Supabase subscription for complaints
-  useEffect(() => {
-    const supabase = createClient()
-    const channel = supabase
-      .channel('warden-complaints-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'complaints' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['warden-all-complaints'] })
-          queryClient.invalidateQueries({ queryKey: ['warden-complaints'] })
-          queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [queryClient])
-
   const { data: complaints = [], isLoading } = useQuery({
     queryKey: ['warden-all-complaints'],
     queryFn: () => api.getComplaints(),
-    refetchInterval: 1000,
+    refetchInterval: 15000,
   })
 
   // Derive live complaints per block to highlight blocks with active issues

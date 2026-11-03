@@ -25,6 +25,7 @@ import {
   PackageSearch,
   Shirt,
   ClipboardCheck,
+  Wrench,
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { api } from '@/lib/api'
@@ -117,11 +118,24 @@ export function Sidebar() {
     refetchInterval: 3000,
   })
 
-  const liveStudentBadge = liveStats?.totalStudents ? String(liveStats.totalStudents) : '120'
-  const liveRoomsBadge = liveStats?.occupancyRate ? `${liveStats.occupancyRate}%` : '100%'
-  const liveFeesBadge = liveStats?.totalFeesPending
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  const { data: healthData, isError: isHealthError } = useQuery({
+    queryKey: ['backend-health'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/health`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Backend offline')
+      return res.json()
+    },
+    refetchInterval: 15000,
+    retry: false,
+  })
+  const isHealthy = !isHealthError && healthData?.status === 'healthy'
+
+  const liveStudentBadge = liveStats?.totalStudents !== undefined ? String(liveStats.totalStudents) : '-'
+  const liveRoomsBadge = liveStats?.occupancyRate !== undefined ? `${liveStats.occupancyRate}%` : '-'
+  const liveFeesBadge = liveStats?.totalFeesPending !== undefined
     ? `₹${Math.round(liveStats.totalFeesPending / 1000)}k Due`
-    : '₹1440k Due'
+    : '-'
 
   const isStudent = role === 'student' || pathname.startsWith('/student')
   const isWarden = role === 'warden' || pathname.startsWith('/warden')
@@ -155,6 +169,13 @@ export function Sidebar() {
       badgeColor: complaintsBadge
         ? 'bg-red-50 text-red-600 border border-red-200/80 dark:bg-red-950/50 dark:text-red-300 dark:border-red-900'
         : undefined,
+    },
+    {
+      label: 'Staff & Workers',
+      href: '/admin/staff',
+      icon: Wrench,
+      badge: '14 Active',
+      badgeColor: 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 dark:bg-indigo-950/50 dark:text-indigo-300',
     },
     {
       label: 'Notice Board',
@@ -433,20 +454,31 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Sidebar Footer: FastAPI Cloud Core Healthy */}
+      {/* Sidebar Footer: FastAPI Cloud Core Status */}
       <div className="p-4 border-t border-slate-100 dark:border-slate-800/80">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              {isHealthy ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+              )}
             </span>
             <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
               FastAPI Cloud Core
             </span>
           </div>
-          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-            Healthy
+          <span
+            className={cn(
+              'text-[10px] font-bold',
+              isHealthy ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+            )}
+          >
+            {isHealthy ? 'Healthy' : 'Backend offline'}
           </span>
         </div>
       </div>

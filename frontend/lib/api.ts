@@ -17,9 +17,8 @@ import {
   GrievanceStatus,
 } from './types'
 import { determineAutoPriority } from './priority-helper'
-import studentsData from './students_data.json'
-
-const USE_API = process.env.NEXT_PUBLIC_USE_API !== 'false'
+// Production data always comes from the backend/Supabase database.
+const USE_API = true
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // Helpers to sync state across browser tabs and page navigations
@@ -89,153 +88,26 @@ const persistNotices = (list: Notice[]) => {
   }
 }
 
-const DEFAULT_LAUNDRY_RATES = [
-  { id: 'rate-shirt', item_category: 'SHIRT', service_type: 'WASH_AND_IRON', rate_per_piece: 15, is_active: 'TRUE' },
-  { id: 'rate-trouser', item_category: 'TROUSER', service_type: 'WASH_AND_IRON', rate_per_piece: 18, is_active: 'TRUE' },
-  { id: 'rate-bedsheet', item_category: 'BEDSHEET', service_type: 'WASH_AND_IRON', rate_per_piece: 35, is_active: 'TRUE' },
-  { id: 'rate-towel', item_category: 'TOWEL', service_type: 'WASH_AND_IRON', rate_per_piece: 12, is_active: 'TRUE' },
-  { id: 'rate-jacket', item_category: 'JACKET', service_type: 'WASH_AND_IRON', rate_per_piece: 45, is_active: 'TRUE' },
-]
-
 export const loadStoredLaundryRates = (): any[] => {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('smart_hostel_laundry_rates_v2')
-      if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
-  }
-  return [...DEFAULT_LAUNDRY_RATES]
+  return []
 }
 
-export const persistLaundryRates = (list: any[]) => {
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('smart_hostel_laundry_rates_v2', JSON.stringify(list))
-      window.dispatchEvent(new Event('storage-laundry-rates'))
-    } catch {
-      // ignore
-    }
-  }
-}
-
-const DEFAULT_VISITORS = [
-  {
-    id: 'vis-default-1',
-    name: 'Rajesh Kumar Patel',
-    phone: '+91 98201 00099',
-    category: 'PARENT',
-    host_student_id: 'std-1',
-    host_student_name: 'Aarav Patel',
-    host_student_room: 'A-204',
-    host_student_block: 'Block A (Newton)',
-    purpose: 'Delivering semester supplies and luggage',
-    status: 'CHECKED_IN',
-    created_at: '2026-10-29T08:00:00.000Z',
-    passes: [
-      {
-        id: 'pass-default-1',
-        visitor_id: 'vis-default-1',
-        pass_code: 'VP-882910AA',
-        valid_from: '2026-10-29T07:00:00.000Z',
-        valid_until: '2026-10-29T18:00:00.000Z',
-        is_revoked: 'FALSE',
-      },
-    ],
-    events: [
-      {
-        id: 'evt-1',
-        visitor_id: 'vis-default-1',
-        event_type: 'CHECKED_IN',
-        actor_id: 'SEC-GATE-1',
-        actor_role: 'security',
-        timestamp: '2026-10-29T08:15:00.000Z',
-        details: 'Gate entry verified',
-      },
-    ],
-  },
-  {
-    id: 'vis-default-2',
-    name: 'Sunita Sharma',
-    phone: '+91 98111 55667',
-    category: 'FAMILY',
-    host_student_id: 'std-2',
-    host_student_name: 'Kabir Sen',
-    host_student_room: 'A-204',
-    host_student_block: 'Block A (Newton)',
-    purpose: 'Weekend guardian meeting',
-    status: 'CHECKED_IN',
-    created_at: '2026-10-29T08:30:00.000Z',
-    passes: [
-      {
-        id: 'pass-default-2',
-        visitor_id: 'vis-default-2',
-        pass_code: 'VP-771290BB',
-        valid_from: '2026-10-29T08:00:00.000Z',
-        valid_until: '2026-10-29T19:00:00.000Z',
-        is_revoked: 'FALSE',
-      },
-    ],
-    events: [
-      {
-        id: 'evt-2',
-        visitor_id: 'vis-default-2',
-        event_type: 'CHECKED_IN',
-        actor_id: 'SEC-GATE-1',
-        actor_role: 'security',
-        timestamp: '2026-10-29T08:45:00.000Z',
-        details: 'Gate entry verified',
-      },
-    ],
-  },
-  {
-    id: 'vis-default-3',
-    name: 'QuickBite Delivery Express',
-    phone: '+91 99887 66554',
-    category: 'DELIVERY_OFFICIAL',
-    host_student_id: 'std-3',
-    host_student_name: 'Dev Dixit',
-    host_student_room: 'A-204',
-    host_student_block: 'Block A (Newton)',
-    purpose: 'Food delivery parcel',
-    status: 'PENDING_APPROVAL',
-    created_at: '2026-10-29T09:00:00.000Z',
-    passes: [],
-    events: [],
-  },
-]
+export const persistLaundryRates = (_list: any[]) => undefined
 
 export const loadStoredVisitors = (): any[] => {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('smart_hostel_visitors_v2')
-      if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
-  }
-  return [...DEFAULT_VISITORS]
+  return []
 }
 
-export const persistVisitors = (list: any[]) => {
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('smart_hostel_visitors_v2', JSON.stringify(list))
-    } catch {
-      // ignore
-    }
-  }
-}
+export const persistVisitors = (_list: any[]) => undefined
 
 // In-Memory state fallback with comprehensive 96 quad-occupancy residents & 24 rooms
-let mutableStudents: Student[] = ((studentsData as any).students as Student[]) || []
-let mutableRooms: Room[] = ((studentsData as any).rooms as Room[]) || []
-let mutableComplaints: Complaint[] = loadStoredComplaints()
-let mutableNotices: Notice[] = loadStoredNotices()
+let mutableStudents: Student[] = []
+let mutableRooms: Room[] = []
+let mutableComplaints: Complaint[] = []
+let mutableNotices: Notice[] = []
 let mutableFees: FeeRecord[] = []
 let mutableWardens: WardenInfo[] = []
-let mutableWardenGrievances: WardenGrievance[] = loadStoredGrievances()
+let mutableWardenGrievances: WardenGrievance[] = []
 let mutableAttendance: Record<string, 'present' | 'absent' | 'leave'> = {}
 
 // Helper for realistic network delay simulation in mock mode
@@ -244,12 +116,11 @@ const delay = (ms: number = 200) => new Promise((resolve) => setTimeout(resolve,
 export const api = {
   // Stats - Real-Time Dynamic Calculation from Supabase
   async getDashboardStats(): Promise<DashboardStats> {
-    try {
+    if (USE_API) {
       const res = await fetch(`${API_BASE_URL}/api/stats`)
-      if (res.ok) {
-        return await res.json()
-      }
-    } catch {}
+      if (!res.ok) throw new Error('Failed to fetch dashboard stats')
+      return res.json()
+    }
 
     if (typeof window !== 'undefined') {
       try {
@@ -315,12 +186,6 @@ export const api = {
       }
     }
 
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/stats`)
-      if (!res.ok) throw new Error('Failed to fetch stats')
-      return res.json()
-    }
-
     return {
       totalStudents: 120,
       totalRooms: 30,
@@ -342,8 +207,7 @@ export const api = {
     floor?: number | string
     unallocatedOnly?: boolean
   }): Promise<Student[]> {
-    // 1. Primary: Live FastAPI Backend API (Single Source of Truth)
-    try {
+    if (USE_API) {
       const query = new URLSearchParams()
       if (params?.search) query.set('search', params.search)
       if (params?.block && params.block !== 'all') query.set('block', params.block)
@@ -351,15 +215,12 @@ export const api = {
       if (params?.floor && params.floor !== 'all' && Number(params.floor) > 0) query.set('floor', String(params.floor))
       if (params?.unallocatedOnly) query.set('unallocated_only', 'true')
       const res = await fetch(`${API_BASE_URL}/api/students?${query.toString()}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
-          return data
-        }
-      }
-    } catch {}
+      if (!res.ok) throw new Error('Failed to fetch students')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
+    }
 
-    // 2. Secondary: Supabase if available
+    // Secondary: Supabase if available
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -434,13 +295,21 @@ export const api = {
   async getUnallocatedStudents(): Promise<Student[]> {
     if (USE_API) {
       const res = await fetch(`${API_BASE_URL}/api/students/unallocated`)
-      if (res.ok) return res.json()
+      if (!res.ok) throw new Error('Failed to fetch unallocated students')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     }
     const all = await this.getStudents()
     return all.filter((s) => !s.roomNumber || s.roomNumber.trim() === '')
   },
 
   async getStudentById(id: string): Promise<Student | undefined> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/students/${id}`)
+      if (res.status === 404) return undefined
+      if (!res.ok) throw new Error('Failed to fetch student')
+      return res.json()
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -471,17 +340,18 @@ export const api = {
         // Fallback
       }
     }
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/students/${id}`)
-      if (!res.ok) throw new Error('Failed to fetch student')
-      return res.json()
-    }
     await delay(100)
     return mutableStudents.find((s) => s.id === id)
   },
 
   // Blocks - Single Block Architecture: Block A (Newton), 5 Floors, 30 Rooms, 120 Beds
   async getBlocks(): Promise<Block[]> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/blocks`)
+      if (!res.ok) throw new Error('Failed to fetch blocks')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -532,22 +402,18 @@ export const api = {
     floor?: number | string
     status?: string
   }): Promise<Room[]> {
-    // 1. Primary: Live FastAPI Backend API
-    try {
+    if (USE_API) {
       const query = new URLSearchParams()
       if (params?.blockId && params.blockId !== 'all') query.set('block_id', params.blockId)
       if (params?.status && params.status !== 'all') query.set('status', params.status)
       if (params?.floor && params.floor !== 'all' && Number(params.floor) > 0) query.set('floor', String(params.floor))
       const res = await fetch(`${API_BASE_URL}/api/rooms?${query.toString()}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
-          return data
-        }
-      }
-    } catch {}
+      if (!res.ok) throw new Error('Failed to fetch rooms')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
+    }
 
-    // 2. Secondary: Supabase fallback
+    // Secondary: Supabase fallback
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -597,6 +463,12 @@ export const api = {
   },
 
   async getRoomById(id: string): Promise<Room | undefined> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/rooms/${id}`)
+      if (res.status === 404) return undefined
+      if (!res.ok) throw new Error('Failed to fetch room')
+      return res.json()
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -621,38 +493,22 @@ export const api = {
         // Fallback
       }
     }
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/rooms/${id}`)
-      if (!res.ok) throw new Error('Failed to fetch room')
-      return res.json()
-    }
     await delay(100)
     return mutableRooms.find((r) => r.id === id || r.number === id)
   },
 
   async allocateRoom(roomId: string, studentId: string, bedNumber: string): Promise<Room> {
     if (USE_API) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/allocate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ student_id: studentId, bed_number: bedNumber }),
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          const rIdx = mutableRooms.findIndex((r) => r.id === roomId || r.number === roomId)
-          if (rIdx !== -1) mutableRooms[rIdx] = updated
-          const sIdx = mutableStudents.findIndex((s) => s.id === studentId)
-          if (sIdx !== -1) {
-            mutableStudents[sIdx].roomNumber = updated.number
-            mutableStudents[sIdx].bedNumber = bedNumber
-            mutableStudents[sIdx].blockName = updated.blockName
-          }
-          return updated
-        }
-      } catch (e) {
-        console.warn('Backend allocate endpoint failed, syncing client-side:', e)
+      const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, bed_number: bedNumber }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to allocate room' }))
+        throw new Error(err.detail || 'Failed to allocate room')
       }
+      return res.json()
     }
 
     const roomIndex = mutableRooms.findIndex((r) => r.id === roomId || r.number === roomId)
@@ -756,27 +612,16 @@ export const api = {
 
   async deallocateRoom(roomId: string, studentId: string, reason?: string): Promise<Room> {
     if (USE_API) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/deallocate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ student_id: studentId, reason }),
-        })
-        if (res.ok) {
-          const updated = await res.json()
-          const rIdx = mutableRooms.findIndex((r) => r.id === roomId || r.number === roomId)
-          if (rIdx !== -1) mutableRooms[rIdx] = updated
-          const sIdx = mutableStudents.findIndex((s) => s.id === studentId)
-          if (sIdx !== -1) {
-            mutableStudents[sIdx].roomNumber = ''
-            mutableStudents[sIdx].bedNumber = ''
-            mutableStudents[sIdx].blockName = ''
-          }
-          return updated
-        }
-      } catch (e) {
-        console.warn('Backend deallocate endpoint failed, syncing client-side:', e)
+      const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/deallocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, reason }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Failed to deallocate room' }))
+        throw new Error(err.detail || 'Failed to deallocate room')
       }
+      return res.json()
     }
 
     const roomIndex = mutableRooms.findIndex((r) => r.id === roomId || r.number === roomId)
@@ -1185,6 +1030,9 @@ export const api = {
   },
 
   async approveComplaintResolution(id: string, note?: string): Promise<Complaint> {
+    if (USE_API) {
+      return this.updateComplaintStatus(id, 'student_approved', note || 'Student verified and confirmed defect resolved.')
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -1230,6 +1078,9 @@ export const api = {
   },
 
   async reopenComplaint(id: string, reason?: string): Promise<Complaint> {
+    if (USE_API) {
+      return this.updateComplaintStatus(id, 'in_progress', reason || 'Issue not resolved properly. Re-opened.')
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -1300,6 +1151,12 @@ export const api = {
 
   // Notices
   async getNotices(): Promise<Notice[]> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/notices`)
+      if (!res.ok) throw new Error('Failed to fetch notices')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -1321,11 +1178,6 @@ export const api = {
       } catch {
         // Fallback
       }
-    }
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/notices`)
-      if (!res.ok) throw new Error('Failed to fetch notices')
-      return res.json()
     }
     await delay(150)
     mutableNotices = loadStoredNotices()
@@ -1372,13 +1224,13 @@ export const api = {
   // Fees
   async getFees(params?: { studentId?: string; status?: string }): Promise<FeeRecord[]> {
     if (USE_API) {
-      try {
-        const query = new URLSearchParams()
-        if (params?.studentId) query.set('student_id', params.studentId)
-        if (params?.status) query.set('status', params.status)
-        const res = await fetch(`${API_BASE_URL}/api/fees?${query.toString()}`)
-        if (res.ok) return res.json()
-      } catch {}
+      const query = new URLSearchParams()
+      if (params?.studentId) query.set('student_id', params.studentId)
+      if (params?.status && params.status !== 'all') query.set('status', params.status)
+      const res = await fetch(`${API_BASE_URL}/api/fees?${query.toString()}`)
+      if (!res.ok) throw new Error('Failed to fetch fees')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     }
     if (typeof window !== 'undefined') {
       try {
@@ -1409,14 +1261,6 @@ export const api = {
         // Fallback
       }
     }
-    if (USE_API) {
-      const query = new URLSearchParams()
-      if (params?.studentId) query.set('student_id', params.studentId)
-      if (params?.status) query.set('status', params.status)
-      const res = await fetch(`${API_BASE_URL}/api/fees?${query.toString()}`)
-      if (!res.ok) throw new Error('Failed to fetch fees')
-      return res.json()
-    }
     await delay(200)
     let list = [...mutableFees]
     if (params?.studentId) {
@@ -1428,81 +1272,32 @@ export const api = {
     return list
   },
 
-  async payFee(feeId: string, mode: string = 'Online Gateway (UPI)'): Promise<FeeRecord> {
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const paidDate = new Date().toISOString().split('T')[0]
-        const receiptNumber = `RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
-
-        const { data, error } = await supabase
-          .from('payments')
-          .update({
-            status: 'paid',
-            paid_date: paidDate,
-            receipt_number: receiptNumber,
-            mode,
-          })
-          .eq('id', feeId)
-          .select()
-          .single()
-
-        if (!error && data) {
-          if (data.student_id) {
-            await supabase
-              .from('profiles')
-              .update({ fee_status: 'paid', fee_amount_due: 0 })
-              .eq('id', data.student_id)
-          }
-
-          return {
-            id: data.id,
-            studentId: data.student_id,
-            studentName: data.student_name,
-            rollNo: data.roll_no || '',
-            roomNumber: data.room_number || '',
-            title: data.title,
-            semester: data.semester || 'Semester 5',
-            amount: Number(data.amount) || 0,
-            dueDate: data.due_date,
-            paidDate: data.paid_date,
-            status: 'paid',
-            receiptNumber: data.receipt_number,
-            mode: data.mode,
-          }
-        }
-      } catch (err) {
-        console.error('Failed to update payment in Supabase:', err)
-      }
+  async payFee(feeId: string, mode: string = 'Online Gateway (UPI)', studentId?: string): Promise<FeeRecord> {
+    const res = await fetch(`${API_BASE_URL}/api/fees/${feeId}/pay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, student_id: studentId }),
+    })
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null)
+      const errorMessage = errorData?.detail || `Payment failed (${res.status})`
+      throw new Error(errorMessage)
     }
+    return res.json()
+  },
 
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/fees/${feeId}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      })
-      if (!res.ok) throw new Error('Failed to process payment')
-      return res.json()
-    }
-    await delay(500)
-    const idx = mutableFees.findIndex((f) => f.id === feeId)
-    if (idx === -1) throw new Error('Fee record not found')
-
-    const updated: FeeRecord = {
-      ...mutableFees[idx],
-      status: 'paid',
-      paidDate: new Date().toISOString().split('T')[0],
-      receiptNumber: `RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      mode,
-    }
-    mutableFees[idx] = updated
-    return updated
+  async getDemoProfiles(): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/api/profiles/demo`)
+    if (!res.ok) throw new Error('Failed to fetch demo profiles')
+    return res.json()
   },
 
   // Attendance - Real-Time Dynamic Queries from Supabase
   async getAttendanceHistory(): Promise<AttendanceDaySummary[]> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/attendance/history`)
+      if (res.ok) return res.json()
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -1534,15 +1329,14 @@ export const api = {
         // Fallback
       }
     }
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/attendance/history`)
-      if (!res.ok) throw new Error('Failed to fetch attendance history')
-      return res.json()
-    }
     return []
   },
 
   async getAttendanceForToday(): Promise<Record<string, 'present' | 'absent' | 'leave'>> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/attendance/today`)
+      if (res.ok) return res.json()
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -1564,11 +1358,6 @@ export const api = {
         // Fallback
       }
     }
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/attendance/today`)
-      if (!res.ok) throw new Error('Failed to fetch attendance')
-      return res.json()
-    }
     return { ...mutableAttendance }
   },
 
@@ -1576,6 +1365,14 @@ export const api = {
     studentId: string,
     status: 'present' | 'absent' | 'leave'
   ): Promise<{ success: boolean; studentId: string; status: string }> {
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, status }),
+      })
+      if (res.ok) return res.json()
+    }
     if (typeof window !== 'undefined') {
       try {
         const { createClient } = await import('@/lib/supabase/client')
@@ -1604,15 +1401,6 @@ export const api = {
         console.error('Failed to mark attendance in Supabase:', err)
       }
     }
-    if (USE_API) {
-      const res = await fetch(`${API_BASE_URL}/api/attendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: studentId, status }),
-      })
-      if (!res.ok) throw new Error('Failed to record attendance')
-      return res.json()
-    }
     await delay(100)
     mutableAttendance[studentId] = status
     return { success: true, studentId, status }
@@ -1620,39 +1408,15 @@ export const api = {
 
   // Wardens Directory (Single Block: Block A Newton)
   async getWardens(): Promise<WardenInfo[]> {
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const { data, error } = await supabase.from('wardens').select('*')
-        if (!error && data && data.length > 0) {
-          const wardenA =
-            data.find(
-              (w: any) =>
-                (w.assigned_block_name || '').toLowerCase().includes('block a') ||
-                w.assigned_block_id === 'blk-a'
-            ) || data[0]
-          return [
-            {
-              id: wardenA.id,
-              name: wardenA.name || 'Prof. Rajesh K. Sharma',
-              email: wardenA.email || 'rajesh.sharma@hostelos.edu',
-              phone: wardenA.phone || '+91 98111 22334',
-              assignedBlockId: wardenA.assigned_block_id || 'blk-a',
-              assignedBlockName: 'Block A (Newton)',
-              designation: wardenA.designation || 'Senior Resident Warden',
-              status: wardenA.status || 'on_duty',
-              avatar: wardenA.avatar_url,
-            },
-          ]
-        }
-      } catch {
-        // Fallback
-      }
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/wardens`)
+      if (!res.ok) throw new Error('Failed to fetch wardens')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     }
     return [
       {
-        id: 'wrd-1',
+        id: 'usr-warden-1',
         name: 'Prof. Rajesh K. Sharma',
         email: 'rajesh.sharma@hostelos.edu',
         phone: '+91 98111 22334',
@@ -1665,26 +1429,14 @@ export const api = {
   },
 
   // Maintenance Technicians & Staff Directory
-  async getStaff(): Promise<StaffMember[]> {
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const { data, error } = await supabase.from('staff').select('*')
-        if (!error && data) {
-          return data.map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            role: s.role || '',
-            specialty: s.specialty || s.role || '',
-            phone: s.phone || '',
-            status: s.status || 'Available',
-            activeJobs: s.active_jobs ?? 0,
-          }))
-        }
-      } catch {
-        // Fallback
-      }
+  async getStaff(params?: { trade?: string }): Promise<StaffMember[]> {
+    if (USE_API) {
+      const query = new URLSearchParams()
+      if (params?.trade && params.trade !== 'all') query.set('trade', params.trade)
+      const res = await fetch(`${API_BASE_URL}/api/staff?${query.toString()}`)
+      if (!res.ok) throw new Error('Failed to fetch staff')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     }
     return []
   },
@@ -1692,40 +1444,11 @@ export const api = {
   // Confidential Student Grievances against Wardens
   // SECURITY NOTICE: ADMIN ACCESS ONLY - EXCLUDED FROM WARDEN PORTAL
   async getWardenGrievances(): Promise<WardenGrievance[]> {
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const { data, error } = await supabase
-          .from('warden_grievances')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (!error && Array.isArray(data) && data.length > 0) {
-          const mapped: WardenGrievance[] = data.map((row: any) => ({
-            id: String(row.id),
-            studentId: row.student_id || '',
-            studentName: row.student_name || 'Anonymous Student',
-            studentEmail: row.student_email || '',
-            studentPhone: row.student_phone || '',
-            roomNumber: row.room_number || '',
-            blockName: row.block_name || '',
-            wardenName: row.warden_name || '',
-            wardenId: row.warden_id || '',
-            category: row.category || 'other',
-            subject: row.subject || 'Warden Grievance',
-            description: row.description || '',
-            status: (row.status || 'under_review') as GrievanceStatus,
-            adminNotes: row.admin_notes || undefined,
-            createdAt: row.created_at || new Date().toISOString(),
-            updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
-          }))
-          persistGrievances(mapped)
-          return mapped
-        }
-      } catch (err) {
-        console.warn('Supabase getWardenGrievances failed, falling back to local:', err)
-      }
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/warden-grievances`)
+      if (!res.ok) throw new Error('Failed to fetch warden grievances')
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     }
 
     await delay(100)
@@ -1738,41 +1461,18 @@ export const api = {
   async createWardenGrievance(
     data: Omit<WardenGrievance, 'id' | 'createdAt' | 'updatedAt' | 'status'>
   ): Promise<WardenGrievance> {
-    const now = new Date().toISOString()
-    let generatedId = `grv-${Date.now()}`
-
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        const { data: supaRow, error } = await supabase
-          .from('warden_grievances')
-          .insert({
-            student_id: data.studentId,
-            student_name: data.studentName,
-            student_email: data.studentEmail,
-            student_phone: data.studentPhone,
-            room_number: data.roomNumber,
-            block_name: data.blockName,
-            warden_name: data.wardenName,
-            warden_id: (data as any).wardenId || null,
-            category: data.category,
-            subject: data.subject,
-            description: data.description,
-            status: 'under_review',
-            admin_notes: data.adminNotes,
-          })
-          .select()
-          .single()
-
-        if (!error && supaRow) {
-          generatedId = String(supaRow.id)
-        }
-      } catch (err) {
-        console.warn('Supabase createWardenGrievance error:', err)
-      }
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/warden-grievances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error('Failed to submit grievance')
+      return await res.json()
     }
 
+    const now = new Date().toISOString()
+    const generatedId = `grv-${Date.now()}`
     const newGrievance: WardenGrievance = {
       ...data,
       id: generatedId,
@@ -1791,21 +1491,14 @@ export const api = {
     status: GrievanceStatus,
     adminNotes?: string
   ): Promise<WardenGrievance> {
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        await supabase
-          .from('warden_grievances')
-          .update({
-            status,
-            admin_notes: adminNotes,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', id)
-      } catch (err) {
-        console.warn('Supabase updateWardenGrievanceStatus error:', err)
-      }
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/warden-grievances/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, adminNotes }),
+      })
+      if (!res.ok) throw new Error('Failed to update grievance status')
+      return await res.json()
     }
 
     await delay(100)
@@ -1846,14 +1539,12 @@ export const api = {
   },
 
   async deleteWardenGrievance(id: string): Promise<{ success: boolean; id: string }> {
-    if (typeof window !== 'undefined') {
-      try {
-        const { createClient } = await import('@/lib/supabase/client')
-        const supabase = createClient()
-        await supabase.from('warden_grievances').delete().eq('id', id)
-      } catch (err) {
-        console.warn('Supabase deleteWardenGrievance error:', err)
-      }
+    if (USE_API) {
+      const res = await fetch(`${API_BASE_URL}/api/warden-grievances/${id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Failed to delete grievance')
+      return await res.json()
     }
 
     await delay(100)

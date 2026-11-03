@@ -1,40 +1,9 @@
 import pytest
 from datetime import datetime, timezone
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from backend.app.main import app
-from backend.app.db.session import Base, get_db
 from backend.app.models.asset import Asset, AssetCondition, AssetLifecycleStatus, ConsumableItem
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-test_engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
-@pytest.fixture(autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=test_engine)
-    yield
-    Base.metadata.drop_all(bind=test_engine)
-
-client = TestClient(app)
-
-def test_asset_lifecycle_register_transfer_and_history():
+def test_asset_lifecycle_register_transfer_and_history(client):
     # 1. Register asset
     payload = {
         "asset_tag": "AST-BLK-A-RM204-FAN-01",
@@ -76,7 +45,7 @@ def test_asset_lifecycle_register_transfer_and_history():
     assert "Block A" in updated["movements"][1]["from_location"]
     assert "Block B" in updated["movements"][1]["to_location"]
 
-def test_asset_damage_report_and_maintenance_integration():
+def test_asset_damage_report_and_maintenance_integration(client):
     # Register chair
     payload = {
         "asset_tag": "AST-BLK-A-RM204-CHR-01",
@@ -118,7 +87,7 @@ def test_asset_damage_report_and_maintenance_integration():
     assert asset_res2.json()["condition"] == "GOOD"
     assert asset_res2.json()["status"] == "IN_USE"
 
-def test_consumable_stock_and_negative_stock_rejection():
+def test_consumable_stock_and_negative_stock_rejection(client):
     # Create consumable item
     item_payload = {
         "item_code": "CON-LED-BULB-9W",

@@ -37,6 +37,7 @@ from backend.app.models.hostel import (
     FeeRecord,
     PaymentTransaction,
     Notice,
+    Staff,
 )
 from backend.app.models.visitor import Visitor, VisitorPass, VisitorEvent, VisitorStatus, VisitorCategory
 from backend.app.models.parcel import Parcel, ParcelPickupCode, ParcelEvent, ParcelStatus
@@ -503,7 +504,7 @@ def run_seed():
 
             now = datetime.now(timezone.utc)
             for idx, (title, desc, cat, priority, status, assigned) in enumerate(complaint_samples):
-                st = students_list[idx * 4]  # distribute across students
+                st = students_list[1 if idx == 1 else (idx * 4)]  # ensure Kabir Sen (usr-student-2) has a ticket
                 created_ts = now - timedelta(days=(25 - idx))
                 cmp_id = f"cmp-2026-{idx + 1:04d}"
                 c = Complaint(
@@ -838,6 +839,40 @@ def run_seed():
                         status=AssetLifecycleStatus.AVAILABLE,
                         purchase_cost=1500.0,
                     ))
+
+            # 14 Maintenance Staff Workers (2 per trade across 7 categories)
+            staff_data = [
+                # Electrical
+                ("stf-elec-1", "Ramesh Kumar", "9820145231", "Electrical"),
+                ("stf-elec-2", "Rajesh Verma", "9711894320", "Electrical"),
+                # Plumbing & Water
+                ("stf-plumb-1", "Suresh Patel", "8826541098", "Plumbing & Water"),
+                ("stf-plumb-2", "Mahendra Yadav", "8700234189", "Plumbing & Water"),
+                # Wi-Fi & Internet
+                ("stf-wifi-1", "Amit Sharma", "7982410567", "Wi-Fi & Internet"),
+                ("stf-wifi-2", "Vikram Rathore", "7838129045", "Wi-Fi & Internet"),
+                # Housekeeping / Cleaning
+                ("stf-clean-1", "Santosh Meena", "6392018475", "Housekeeping / Cleaning"),
+                ("stf-clean-2", "Manoj Chauhan", "6289450123", "Housekeeping / Cleaning"),
+                # Mess & Dining
+                ("stf-mess-1", "Jagdish Singh", "9451203874", "Mess & Dining"),
+                ("stf-mess-2", "Dilip Joshi", "8447819203", "Mess & Dining"),
+                # Carpentry / Furniture
+                ("stf-carp-1", "Ramvilas Prajapati", "7303918245", "Carpentry / Furniture"),
+                ("stf-carp-2", "Govind Suthar", "6388102947", "Carpentry / Furniture"),
+                # Other Hostel Defect -> General Maintenance
+                ("stf-gen-1", "Ashok Gujjar", "9123847510", "General Maintenance"),
+                ("stf-gen-2", "Dinesh Solanki", "8130928471", "General Maintenance"),
+            ]
+            for s_id, s_name, s_phone, s_trade in staff_data:
+                db.merge(Staff(
+                    id=s_id,
+                    name=s_name,
+                    phone=s_phone,
+                    trade=s_trade,
+                    status="active",
+                    created_at=datetime.now(timezone.utc),
+                ))
 
             print("=" * 60)
             print("SEED TRANSACTION READY: Committing to database...")

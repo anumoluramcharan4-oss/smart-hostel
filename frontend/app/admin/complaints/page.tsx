@@ -25,7 +25,6 @@ import {
   Send,
 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Complaint, ComplaintPriority, ComplaintStatus } from '@/lib/types'
@@ -69,31 +68,10 @@ export default function AdminComplaintsPage() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [queryClient])
 
-  // Real-time Supabase subscription for complaints
-  useEffect(() => {
-    const supabase = createClient()
-    const channel = supabase
-      .channel('admin-complaints-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'complaints' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['admin-complaints-list'] })
-          queryClient.invalidateQueries({ queryKey: ['topbar-complaints'] })
-          queryClient.invalidateQueries({ queryKey: ['sidebar-complaints'] })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [queryClient])
-
   const { data: complaints = [], isLoading } = useQuery({
     queryKey: ['admin-complaints-list'],
     queryFn: () => api.getComplaints(),
-    refetchInterval: 1500,
+    refetchInterval: 15000,
   })
 
   // Mutations
@@ -531,7 +509,7 @@ export default function AdminComplaintsPage() {
                 >
                   {availableStaff.map((s) => (
                     <option key={s.id} value={s.name}>
-                      {s.name} ({s.phone})
+                      {s.name} ({s.trade || s.role || 'Staff'}) — {s.phone}
                     </option>
                   ))}
                 </select>

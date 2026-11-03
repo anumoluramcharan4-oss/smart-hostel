@@ -1,40 +1,22 @@
 import pytest
 from datetime import datetime, timezone
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from backend.app.main import app
-from backend.app.db.session import Base, get_db
-from backend.app.models.laundry import LaundryOrder, LaundrySlot, LaundryOrderStatus
+from backend.app.models.laundry import LaundryOrder, LaundrySlot, LaundryOrderStatus, LaundryRate
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-test_engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @pytest.fixture(autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=test_engine)
-    app.dependency_overrides[get_db] = override_get_db
-    yield
-    app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=test_engine)
+def seed_rates(db):
+    default_rates = [
+        LaundryRate(item_category="SHIRT", rate_per_piece=15.0),
+        LaundryRate(item_category="BEDSHEET", rate_per_piece=35.0),
+        LaundryRate(item_category="TOWEL", rate_per_piece=20.0),
+        LaundryRate(item_category="TROUSER", rate_per_piece=25.0),
+    ]
+    db.add_all(default_rates)
+    db.commit()
 
-client = TestClient(app)
 
-def test_laundry_booking_server_side_pricing_and_student_isolation():
+def test_laundry_booking_server_side_pricing_and_student_isolation(client):
     # 1. Book laundry order
     # 2 shirts (15 ea = 30) + 1 bedsheet (35 ea = 35) -> Expected total = 65.0
     payload = {
@@ -73,7 +55,8 @@ def test_laundry_booking_server_side_pricing_and_student_isolation():
     assert s2_res.status_code == 200
     assert len(s2_res.json()) == 0
 
-def test_laundry_count_mismatch_and_intake_verification():
+
+def test_laundry_count_mismatch_and_intake_verification(client):
     # Book with 3 shirts
     payload = {
         "student_id": "STU103",
@@ -108,17 +91,17 @@ def test_laundry_count_mismatch_and_intake_verification():
     assert updated["final_amount"] == 30.0
     assert updated["status"] == "COLLECTED"
 
-def test_laundry_slot_capacity_limit():
+
+def test_laundry_slot_capacity_limit(client, db):
     # Slot with 1 capacity
-    with TestingSessionLocal() as db:
-        slot = LaundrySlot(
-            slot_date="2026-11-01",
-            time_window="08:00 - 09:00 AM",
-            max_capacity=1,
-            booked_count=1
-        )
-        db.add(slot)
-        db.commit()
+    slot = LaundrySlot(
+        slot_date="2026-11-01",
+        time_window="08:00 - 09:00 AM",
+        max_capacity=1,
+        booked_count=1
+    )
+    db.add(slot)
+    db.commit()
 
     # Attempt to book another order in the full slot -> Rejected
     payload = {
@@ -132,7 +115,8 @@ def test_laundry_slot_capacity_limit():
     assert res.status_code == 400
     assert "fully booked" in res.json()["detail"]
 
-def test_laundry_rate_update_by_admin():
+
+def test_laundry_rate_update_by_admin(client):
     # 1. Get initial rates
     rates_res = client.get("/api/v1/laundry/rates")
     assert rates_res.status_code == 200

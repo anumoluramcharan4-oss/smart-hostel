@@ -21,10 +21,10 @@ class Block(Base):
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     code = Column(String, nullable=True)
-    floors_count = Column(Integer, default=5)
-    rooms_count = Column(Integer, default=30)
-    capacity = Column(Integer, default=120)
-    occupied = Column(Integer, default=120)
+    floors_count = Column(Integer, nullable=False)
+    rooms_count = Column(Integer, default=0)
+    capacity = Column(Integer, default=0)
+    occupied = Column(Integer, default=0)
     warden_name = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -35,12 +35,12 @@ class Room(Base):
     id = Column(String, primary_key=True)
     number = Column(String, nullable=False, index=True)
     block_id = Column(String, ForeignKey("blocks.id", ondelete="SET NULL"), nullable=True)
-    block_name = Column(String, default="Block A (Newton)")
-    floor = Column(Integer, default=1, index=True)
-    type = Column(String, default="quad")
-    capacity = Column(Integer, default=4)
-    occupied = Column(Integer, default=4)
-    status = Column(String, default="occupied")  # 'available' | 'occupied' | 'maintenance'
+    block_name = Column(String, nullable=True)
+    floor = Column(Integer, nullable=False, index=True)
+    type = Column(String, nullable=False)
+    capacity = Column(Integer, nullable=False)
+    occupied = Column(Integer, default=0)
+    status = Column(String, default="available")  # 'available' | 'occupied' | 'maintenance'
     amenities = Column(JSON, default=list)
     occupants = Column(JSON, default=list)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -128,7 +128,7 @@ class Complaint(Base):
     student_id = Column(String, ForeignKey("profiles.id", ondelete="SET NULL"), nullable=True)
     student_name = Column(String, nullable=True)
     room_number = Column(String, nullable=True)
-    block_name = Column(String, default="Block A (Newton)")
+    block_name = Column(String, nullable=True)
     assigned_to = Column(String, nullable=True)
     resolution_notes = Column(String, nullable=True)
     timeline = Column(JSON, default=list)
@@ -177,4 +177,52 @@ class Notice(Base):
     target_audience = Column(String, default="all")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime, nullable=True)
+
+
+class Staff(Base):
+    __tablename__ = "staff"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, unique=True, nullable=False)
+    trade = Column(String, nullable=False, index=True)
+    status = Column(String, default="active", nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Warden(Base):
+    __tablename__ = "wardens"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    assigned_block_id = Column(String, default="blk-a")
+    assigned_block_name = Column(String, default="Block A (Newton)")
+    designation = Column(String, default="Senior Resident Warden")
+    status = Column(String, default="on_duty")
+    avatar_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class WardenGrievance(Base):
+    __tablename__ = "warden_grievances"
+
+    id = Column(String, primary_key=True)
+    student_id = Column(String, nullable=True)
+    student_name = Column(String, nullable=False, default="Anonymous Student")
+    student_email = Column(String, nullable=True)
+    student_phone = Column(String, nullable=True)
+    room_number = Column(String, nullable=True)
+    block_name = Column(String, nullable=True)
+    warden_name = Column(String, nullable=True)
+    warden_id = Column(String, nullable=True)
+    category = Column(String, default="other")
+    subject = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    status = Column(String, default="under_review")  # 'under_review' | 'resolved' | 'dismissed'
+    admin_notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 

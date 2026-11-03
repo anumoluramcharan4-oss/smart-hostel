@@ -14,10 +14,14 @@ __pycache__/
 */*/__pycache__/
 *.py[cod]
 *$py.class
+venv
 venv/
-.venv/
-backend/venv/
-backend/.venv/
+.venv
+venv/
+backend/venv
+venv/
+backend/.venv
+venv/
 
 # Databases
 *.db

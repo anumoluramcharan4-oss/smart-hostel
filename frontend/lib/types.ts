@@ -132,10 +132,13 @@ export interface FeeRecord {
   roomNumber: string
   title: string
   semester: string
+  term?: string
   amount: number
+  paidAmount?: number
+  pendingAmount?: number
   dueDate: string
   paidDate?: string
-  status: 'paid' | 'pending' | 'overdue'
+  status: 'paid' | 'pending' | 'overdue' | 'partial'
   receiptNumber?: string
   mode?: string
 }
@@ -191,11 +194,13 @@ export interface WardenInfo {
 export interface StaffMember {
   id: string
   name: string
+  phone: string
+  trade: string
+  status: string
   role?: string
   specialty?: string
-  phone: string
-  status?: string
   activeJobs?: number
+  created_at?: string
 }
 
 export type GrievanceCategory =

@@ -1,40 +1,9 @@
 import pytest
 from datetime import datetime, timezone
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from backend.app.main import app
-from backend.app.db.session import Base, get_db
 from backend.app.models.inspection import Inspection, InspectionStatus
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-test_engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
-@pytest.fixture(autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=test_engine)
-    yield
-    Base.metadata.drop_all(bind=test_engine)
-
-client = TestClient(app)
-
-def test_room_inspection_scoring_and_corrective_action_dispatch():
+def test_room_inspection_scoring_and_corrective_action_dispatch(client):
     # 1. Schedule room inspection for Room 204
     sched_payload = {
         "block": "Block A",

@@ -23,7 +23,7 @@ import { formatINR, formatDate } from '@/lib/utils'
 import { FeeRecord } from '@/lib/types'
 
 export default function StudentFeesPage() {
-  const { user } = useAuth()
+  const { user, switchStudent, demoProfiles } = useAuth()
   const queryClient = useQueryClient()
   const [selectedFee, setSelectedFee] = useState<FeeRecord | null>(null)
   const [paymentMode, setPaymentMode] = useState('UPI (Google Pay / PhonePe)')
@@ -34,9 +34,9 @@ export default function StudentFeesPage() {
   })
 
   const payMutation = useMutation({
-    mutationFn: (feeId: string) => api.payFee(feeId, paymentMode),
+    mutationFn: (feeId: string) => api.payFee(feeId, paymentMode, user?.id),
     onMutate: async (feeId) => {
-      await queryClient.cancelQueries({ queryKey: ['student-fees', user?.id] })
+      await queryClient.cancelQueries({ queryKey: ['student-fees'] })
       const prev = queryClient.getQueryData<FeeRecord[]>(['student-fees', user?.id])
 
       queryClient.setQueryData<FeeRecord[]>(['student-fees', user?.id], (old = []) =>
@@ -46,7 +46,10 @@ export default function StudentFeesPage() {
                 ...f,
                 status: 'paid' as const,
                 paidDate: new Date().toISOString().split('T')[0],
-                receiptNumber: `RCP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+                receiptNumber: `TXN-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+                mode: paymentMode,
+                pendingAmount: 0,
+                paidAmount: f.amount,
               }
             : f
         )
@@ -54,28 +57,36 @@ export default function StudentFeesPage() {
 
       return { prev }
     },
-    onError: (err, feeId, ctx) => {
+    onError: (err: any, feeId, ctx) => {
       if (ctx?.prev) {
         queryClient.setQueryData(['student-fees', user?.id], ctx.prev)
       }
-      toast.error('Payment simulation failed. Please try again.')
+      toast.error(err?.message || 'Payment simulation failed. Please try again.')
     },
     onSuccess: (updated) => {
-      toast.success(`Payment successful! Receipt ${updated.receiptNumber} generated.`)
+      toast.success(`Payment successful! Receipt ${updated.receiptNumber || 'generated'}.`)
       setSelectedFee(null)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['student-fees', user?.id] })
+      queryClient.invalidateQueries({ queryKey: ['student-fees'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-student-fees'] })
+      queryClient.invalidateQueries({ queryKey: ['sidebar-live-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-fees'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
       queryClient.invalidateQueries({ queryKey: ['student-complaints'] })
     },
   })
 
-  const totalPaid = fees
-    .filter((f) => f.status === 'paid')
-    .reduce((sum, f) => sum + f.amount, 0)
-  const totalPending = fees
-    .filter((f) => f.status !== 'paid')
-    .reduce((sum, f) => sum + f.amount, 0)
+  const totalPaid = fees.reduce(
+    (sum, f) => sum + (f.status === 'paid' ? f.amount : f.paidAmount || 0),
+    0
+  )
+  const totalPending = fees.reduce(
+    (sum, f) => sum + (f.status === 'paid' ? 0 : f.pendingAmount ?? f.amount),
+    0
+  )
 
   const handleDownloadReceipt = (receiptNo?: string) => {
     toast.success(`Downloading official fee receipt (${receiptNo || 'RCP-2026-8841'}).pdf`)
@@ -87,6 +98,53 @@ export default function StudentFeesPage() {
         title="Hostel Fees & Semester Dues"
         subtitle="Review accommodation fees, mess advances, payment receipts, and settle dues securely."
       />
+
+      {demoProfiles?.students && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl border border-border bg-card/60 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-foreground">Active Resident:</span>
+            <span className="text-xs text-primary font-semibold">
+              {user?.name} (Room {user?.roomNumber || 'A-101'}, {user?.rollNo})
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[11px] text-muted-foreground">Test Students:</span>
+            <button
+              type="button"
+              onClick={() => switchStudent && switchStudent(demoProfiles.students.pending.id)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                user?.id === demoProfiles.students.pending.id
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 font-bold'
+                  : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+              }`}
+            >
+              Pending ({demoProfiles.students.pending.name.split(' ')[0]})
+            </button>
+            <button
+              type="button"
+              onClick={() => switchStudent && switchStudent(demoProfiles.students.partial.id)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                user?.id === demoProfiles.students.partial.id
+                  ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/40 font-bold'
+                  : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+              }`}
+            >
+              Partial ({demoProfiles.students.partial.name.split(' ')[0]})
+            </button>
+            <button
+              type="button"
+              onClick={() => switchStudent && switchStudent(demoProfiles.students.paid.id)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                user?.id === demoProfiles.students.paid.id
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 font-bold'
+                  : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+              }`}
+            >
+              Paid ({demoProfiles.students.paid.name.split(' ')[0]})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 3 Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -169,9 +227,16 @@ export default function StudentFeesPage() {
                 </div>
 
                 <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                  <span className="text-base font-bold text-foreground tabular-nums">
-                    {formatINR(fee.amount)}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-base font-bold text-foreground tabular-nums block">
+                      {formatINR(fee.amount)}
+                    </span>
+                    {fee.status === 'partial' && (
+                      <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 block">
+                        Due: {formatINR(fee.pendingAmount ?? fee.amount / 2)}
+                      </span>
+                    )}
+                  </div>
 
                   {fee.status === 'paid' ? (
                     <button
@@ -184,9 +249,16 @@ export default function StudentFeesPage() {
                   ) : (
                     <button
                       onClick={() => setSelectedFee(fee)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all hover:scale-105"
+                      disabled={payMutation.isPending}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all hover:scale-105 disabled:opacity-50"
                     >
-                      Pay Now <ArrowRight className="h-3.5 w-3.5" />
+                      {payMutation.isPending && selectedFee?.id === fee.id ? (
+                        'Processing...'
+                      ) : (
+                        <>
+                          Pay Now <ArrowRight className="h-3.5 w-3.5" />
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
@@ -231,11 +303,16 @@ export default function StudentFeesPage() {
                   Amount Payable
                 </span>
                 <p className="text-3xl font-black text-foreground mt-1 tabular-nums">
-                  {formatINR(selectedFee.amount)}
+                  {formatINR(selectedFee.pendingAmount ?? selectedFee.amount)}
                 </p>
                 <p className="text-xs font-medium text-foreground mt-1">
                   {selectedFee.title}
                 </p>
+                {selectedFee.status === 'partial' && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Total: {formatINR(selectedFee.amount)} • Settled: {formatINR(selectedFee.paidAmount ?? 0)}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -289,7 +366,9 @@ export default function StudentFeesPage() {
                 onClick={() => payMutation.mutate(selectedFee.id)}
                 className="rounded-xl bg-gradient-to-r from-primary to-violet-600 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-primary/20 hover:from-primary/90 disabled:opacity-50"
               >
-                {payMutation.isPending ? 'Processing...' : `Authorize ${formatINR(selectedFee.amount)}`}
+                {payMutation.isPending
+                  ? 'Processing...'
+                  : `Authorize ${formatINR(selectedFee.pendingAmount ?? selectedFee.amount)}`}
               </button>
             </div>
           </div>
