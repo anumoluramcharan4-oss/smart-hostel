@@ -171,3 +171,4 @@ def delete_warden_grievance(grievance_id: str, db: Session = Depends(get_db)):
     db.delete(g)
     db.commit()
     return {"success": True, "id": grievance_id}
+

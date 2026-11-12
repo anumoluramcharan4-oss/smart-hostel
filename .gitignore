@@ -17,11 +17,8 @@ __pycache__/
 venv
 venv/
 .venv
-venv/
 backend/venv
-venv/
 backend/.venv
-venv/
 
 # Databases
 *.db
@@ -30,6 +27,13 @@ venv/
 
 # Environment
 .env
+.env.*
+!.env.example
+*.env
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env.local
 .env.local
 .env.development.local
 .env.test.local

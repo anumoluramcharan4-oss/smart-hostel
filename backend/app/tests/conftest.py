@@ -61,3 +61,4 @@ def db(test_db_lifecycle):
 def client():
     """Provides a TestClient targeting the FastAPI application."""
     return TestClient(app)
+
